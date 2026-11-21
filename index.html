@@ -254,6 +254,11 @@ textarea#layerText:read-only{opacity:.6}
 .inspector input[type=range]{flex:1;accent-color:var(--ink)}
 .inspector .btns{display:flex;gap:6px;flex-wrap:wrap}
 .inspector .muted{font-size:12.5px;color:var(--muted)}
+.inspector .sub{font-weight:600;font-size:13px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line)}
+.inspector .lbl{font-size:12.5px;color:var(--muted)}
+.inspector .ctlrow{display:flex;align-items:center;gap:8px;flex:1;max-width:190px}
+.inspector output{font-size:12.5px;font-weight:500;min-width:44px;text-align:right}
+.inspector input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:7px;padding:2px;background:var(--panel)}
 .pill-note{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 
 .bgs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-inner);padding:8px}
@@ -738,7 +743,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; p.headline = { font: OVERLAY_FONT, locked: false, ...p.headline }; p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; p.headline = { font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, ...p.headline }; p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -786,30 +791,44 @@ function drawVideo(c, W, H, t) {
   const ur = userRange(p);
   if (p.headline.on && p.headline.text && ur && !hit.c.role) drawLowerThird(c, W, H, p.headline, t - ur[0], ur[1] - t);
 }
-function drawLowerThird(c, W, H, hl, lt, remain) {
-  const s = Math.min(W, H) / 1080, pad = 48 * s, fs = 44 * s;
-  const sports = S.mode === 'sports', col = sports ? '#DE5638' : '#1C7FC0';
-  c.save();
-  const HF = `"${hl.font || OVERLAY_FONT}", ${TH}`;
-  c.font = `700 ${fs}px ${HF}`; const rtl = RTL_RE.test(hl.text); c.direction = rtl ? 'rtl' : 'ltr';
-  const maxW = W - pad * 2, lines = wrap(c, hl.text, maxW - 56 * s).slice(0, 3);
+/* headline layout: box size and centre; x/y are the box centre in % of the frame (null = default bottom corner) */
+const HL_DEFAULT = () => S.mode === 'sports' ? '#DE5638' : '#1C7FC0';
+const mctx = document.createElement('canvas').getContext('2d');
+function lum(hex) { const n = parseInt(String(hex).replace('#', ''), 16); const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(n >> 16 & 255) + .7152 * f(n >> 8 & 255) + .0722 * f(n & 255); }
+function hlLayout(c, W, H, hl) {
+  const s = Math.min(W, H) / 1080, pad = 48 * s, fs = 44 * s, HF = `"${hl.font || OVERLAY_FONT}", ${TH}`;
+  c.save(); c.font = `700 ${fs}px ${HF}`;
+  const rtl = RTL_RE.test(hl.text); c.direction = rtl ? 'rtl' : 'ltr';
+  const maxW = W - pad * 2, lines = wrap(c, hl.text || ' ', maxW - 56 * s).slice(0, 3);
   const lineH = fs * 1.75, boxH = lines.length * lineH + 26 * s;
-  const y = H - pad - boxH - (H > W ? H * .07 : 0);
-  const textW = Math.max(...lines.map(l => c.measureText(l).width)) + 56 * s;
+  const boxW = Math.min(maxW, Math.max(...lines.map(l => c.measureText(l).width)) + 56 * s);
+  c.font = `700 ${26 * s}px ${TH}`;
+  const tw = hl.tag ? c.measureText(hl.tag).width + 30 * s : 0, th = hl.tag ? 46 * s : 0;
+  c.restore();
+  const dx = rtl ? W - pad - boxW / 2 : pad + boxW / 2, dy = H - pad - (H > W ? H * .07 : 0) - boxH / 2;
+  const def = { x: Math.round(dx / W * 200) / 2, y: Math.round(dy / H * 200) / 2 };
+  const cx = clamp(hl.x == null ? dx : hl.x / 100 * W, boxW / 2, W - boxW / 2);
+  const cy = clamp(hl.y == null ? dy : hl.y / 100 * H, boxH / 2 + th, H - boxH / 2);
+  return { s, fs, HF, rtl, lines, lineH, boxH, boxW, tw, th, cx, cy, def };
+}
+function drawLowerThird(c, W, H, hl, lt, remain) {
+  const L = hlLayout(c, W, H, hl), { s, rtl, lines, lineH, boxH, boxW, tw, th, cx, cy } = L;
+  const def = HL_DEFAULT(), bg = hl.bg || def, on = hl.bgOn !== false, light = on && lum(bg) > .45;
   const a = Math.min(ease(lt / .5), ease(remain / .35));
-  const w = Math.min(maxW, textW) * a;
-  const x0 = rtl ? W - pad - w : pad;
-  c.fillStyle = col; c.fillRect(x0, y, w, boxH);
-  // tag
-  c.font = `700 ${26 * s}px ${TH}`; c.direction = 'rtl';
-  const tw = c.measureText(hl.tag).width + 30 * s, th = 46 * s;
-  const tx = rtl ? W - pad - tw : pad;
-  c.globalAlpha = a; c.fillStyle = '#FFFFFF'; c.fillRect(tx, y - th, tw, th);
-  c.fillStyle = col; c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillText(hl.tag, tx + tw / 2, y - th / 2 + 2 * s);
+  const left = cx - boxW / 2, right = cx + boxW / 2, top = cy - boxH / 2;
+  c.save(); c.textBaseline = 'middle';
+  if (on) { const w = boxW * a; c.fillStyle = bg; c.fillRect(rtl ? right - w : left, top, w, boxH); }
+  if (hl.tag) {
+    const tx = rtl ? right - tw : left;
+    c.globalAlpha = a; c.fillStyle = !on ? def : light ? '#111837' : '#FFFFFF'; c.fillRect(tx, top - th, tw, th);
+    c.font = `700 ${26 * s}px ${TH}`; c.direction = 'rtl'; c.textAlign = 'center';
+    c.fillStyle = !on || light ? '#FFFFFF' : bg; c.fillText(hl.tag, tx + tw / 2, top - th / 2 + 2 * s);
+  }
   c.globalAlpha = ease((lt - .25) / .4) * a;
-  c.font = `700 ${fs}px ${HF}`; c.direction = rtl ? 'rtl' : 'ltr'; c.fillStyle = '#FFFFFF';
-  c.textAlign = rtl ? 'right' : 'left';
-  lines.forEach((ln, i) => c.fillText(ln, rtl ? W - pad - 28 * s : pad + 28 * s, y + 13 * s + lineH * (i + .5)));
+  c.font = `700 ${L.fs}px ${L.HF}`; c.direction = rtl ? 'rtl' : 'ltr'; c.textAlign = rtl ? 'right' : 'left';
+  c.fillStyle = light ? '#111837' : '#FFFFFF';
+  if (!on) { c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 14 * s; c.shadowOffsetY = 3 * s; }
+  lines.forEach((ln, i) => c.fillText(ln, rtl ? right - 28 * s : left + 28 * s, top + 13 * s + lineH * (i + .5)));
   c.restore();
 }
 
@@ -1159,7 +1178,7 @@ function renderInspector() {
     el.innerHTML = `<div class="row"><b>Headline</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : '<span class="muted">over your clips</span>'}</div>
       <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis}>${esc(p.headline.text)}</textarea>
       <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(p.headline.font)}</select></div>${fontOk[p.headline.font] === false ? `<span class="muted">${esc(p.headline.font)} isn't installed here, so the video uses Noto Sans Thaana. <button class="linkbtn" data-addfont="${esc(p.headline.font)}">Add ${esc(p.headline.font)} file</button></span>` : ''}
-      <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(p.headline.tag)}" style="max-width:160px;font-family:var(--f-thaana)"></div>`;
+      <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(p.headline.tag)}" style="max-width:160px;font-family:var(--f-thaana)"></div>` + headlineFormat(p.headline, dis);
     return;
   }
   const f = sel && findClip(sel.id);
@@ -1183,6 +1202,21 @@ function renderInspector() {
     h += `<div class="btns">${f.kind === 'v' ? `<button class="btn small" data-act="mv-l" ${dis}>Move left</button><button class="btn small" data-act="mv-r" ${dis}>Move right</button>` : ''}<button class="btn small" data-act="dup" ${dis}>Duplicate</button><button class="btn small danger" data-act="rm" ${dis}>Delete</button></div>`;
   }
   el.innerHTML = h;
+}
+function headlineFormat(hl, dis) {
+  const L = hlLayout(mctx, cv.width, cv.height, hl), on = hl.bgOn !== false, def = HL_DEFAULT(), cur = (hl.bg || def).toLowerCase();
+  const xs = hl.x ?? L.def.x, ys = hl.y ?? L.def.y;
+  const sw = [[def, 'Default'], ['#0D3253', 'Navy'], ['#111111', 'Black'], ['#FFFFFF', 'White']];
+  const slider = (id, w, o, v, lbl) => `<div class="row"><label for="${id}">${lbl}</label><span class="ctlrow"><span class="rangewrap ${+v === 50 ? 'on' : ''}" id="${w}" title="Snaps to center"><input type="range" id="${id}" min="0" max="100" step="0.5" value="${v}" ${dis}></span><output id="${o}">${posFmt(v)}</output></span></div>`;
+  return `<div class="sub">Format</div>
+    <div class="row"><span class="lbl">Background</span><div class="seg"><button data-hlbg="1" aria-pressed="${on}" ${dis}>On</button><button data-hlbg="0" aria-pressed="${!on}" ${dis}>Off</button></div></div>
+    <div class="row"><span class="lbl">Color</span><span class="rowbtns">${sw.map(([c, n]) => `<button class="sw" data-hlc="${n === 'Default' ? '' : c}" style="background:${c}" aria-pressed="${on && c.toLowerCase() === cur}" aria-label="${n}" title="${n}" ${dis || (on ? '' : 'disabled')}></button>`).join('')}<input type="color" id="hlColor" value="${hl.bg || def}" aria-label="Custom background color" title="Custom color" ${dis || (on ? '' : 'disabled')}></span></div>
+    ${slider('hlX', 'wHX', 'oHX', xs, 'Position X')}${slider('hlY', 'wHY', 'oHY', ys, 'Position Y')}
+    <div class="btns"><button class="btn small" data-hlreset ${dis} ${hl.x == null && hl.y == null ? 'disabled' : ''}>Reset position</button></div>`;
+}
+function showHeadline() {
+  const ur = userRange(proj()); if (!ur || playing) return;
+  if (playT < ur[0] + .8 || playT > ur[1] - .4) seek(Math.min(ur[0] + 1, (ur[0] + ur[1]) / 2));
 }
 function renderClipActs() {
   const el = $('#clipActs'); if (!el) return;
@@ -1427,11 +1461,18 @@ $('#tl').addEventListener('drop', e => {
 /* ---------------- events: inspector ---------------- */
 $('#inspector').addEventListener('input', e => {
   const p = proj();
+  if ((e.target.id === 'hlX' || e.target.id === 'hlY') && !p.headline.locked) {
+    const v = snapC(parseFloat(e.target.value)), k = e.target.id === 'hlX' ? 'x' : 'y'; e.target.value = v; p.headline[k] = v;
+    $(k === 'x' ? '#oHX' : '#oHY').textContent = posFmt(v); $(k === 'x' ? '#wHX' : '#wHY').classList.toggle('on', v === 50);
+    showHeadline(); scheduleDraw(); return;
+  }
+  if (e.target.id === 'hlColor' && !p.headline.locked) { p.headline.bg = e.target.value; p.headline.bgOn = true; showHeadline(); scheduleDraw(); return; }
   if (e.target.id === 'hlText') { p.headline.text = e.target.value; scheduleDraw(); clearTimeout(S.hlT); S.hlT = setTimeout(renderTimeline, 300); return; }
   if (e.target.id === 'hlTag') { p.headline.tag = e.target.value; scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { const f = S.sel && findClip(S.sel.id); if (!f || f.locked) return; f.c.zoom = parseFloat(e.target.value); $('#oZoom').textContent = Math.round(f.c.zoom * 100) + '%'; scheduleDraw(); }
 });
 $('#inspector').addEventListener('change', e => {
+  if (['hlColor', 'hlX', 'hlY'].includes(e.target.id)) { renderInspector(); return; }
   const p = proj();
   if (e.target.id === 'hlFont') { p.headline.font = e.target.value; document.fonts.load(`700 40px "${p.headline.font}"`, 'ހ').then(scheduleDraw, scheduleDraw); renderInspector(); scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { renderInspector(); return; }
@@ -1455,7 +1496,17 @@ function clipAction(a) {
   if (a === 'mv-l' || a === 'mv-r') { const j = f.i + (a === 'mv-l' ? -1 : 1), o = f.list[j]; if (o && !o.role) { f.list[f.i] = o; f.list[j] = f.c; } }
   seek(Math.min(playT, vTotal())); renderTimeline(); renderInspector();
 }
-$('#inspector').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
+$('#inspector').addEventListener('click', e => {
+  const hl = proj().headline;
+  const hb = e.target.closest('[data-hlbg],[data-hlc],[data-hlreset]');
+  if (hb && hl && !hl.locked) {
+    if (hb.dataset.hlbg != null) hl.bgOn = hb.dataset.hlbg === '1';
+    else if (hb.dataset.hlc != null) { hl.bg = hb.dataset.hlc || null; hl.bgOn = true; }
+    else { hl.x = null; hl.y = null; }
+    renderInspector(); showHeadline(); scheduleDraw(); return;
+  }
+  const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act);
+});
 $('#clipActs').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
 $('#tlRestore').addEventListener('click', e => {
   const b = e.target.closest('[data-restore]'); if (!b || exporting) return; const p = proj(), r = b.dataset.restore;
