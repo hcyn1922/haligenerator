@@ -25,8 +25,8 @@
   --pink:#E55438; --pink-2:#EE7A62; --pink-soft:#FBE1DA;
   --up:#16A34A; --down:#DC3E3E;
   --stage:#111837; --shadow:0 1px 2px rgba(16,24,40,.06);
-  --f-ui:"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --f-thaana:"Faruma", "Noto Sans Thaana", "MV Faseyha", sans-serif;
+  --f-ui:"Inter", "MV Typewriter", "Noto Sans Thaana", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-thaana:"MV Typewriter", "Noto Sans Thaana", sans-serif; /* Dhivehi in the app's own screens */
   --r-card:12px; --r-inner:10px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -516,7 +516,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = t => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
 const RTL_RE = /[ހ-޿؀-ۿ]/;
 const UI = '"Inter", system-ui, sans-serif';
-const TH = '"Noto Sans Thaana", sans-serif';
+const OVERLAY_FONT = 'MV Waheed'; /* Dhivehi drawn on videos and images */
+const TH = '"MV Waheed", "Noto Sans Thaana", sans-serif';
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtT = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = t - m * 60; return String(m).padStart(2,'0') + ':' + s.toFixed(1).padStart(4,'0'); };
 
@@ -723,8 +724,8 @@ function freshProjects() {
     quote: {
       ratio: '4:5', orient: 'portrait', bg: 'b1', bgMid: null, dim: .35, logoPlace: 'right', logoMid: null,
       layers: [
-        { id: uid(), name: 'Text 1', text: 'ތިމަންރަސްކަލާނގެ ރަޙްމަތަކީ ހުރިހާ އެއްޗެއް ފުޅާވެފައިވާ އެއްޗެކެވެ.', font: 'MV Typewriter', size: 66, weight: 700, align: 'center', x: 50, y: 42, width: 80, lh: 1.8, color: '#F6F1E3', shadow: 1 },
-        { id: uid(), name: 'Text 2', text: 'ސޫރަތުލް އަޢްރާފް ― 156', font: 'MV Typewriter', size: 34, weight: 400, align: 'center', x: 50, y: 68, width: 70, lh: 1.6, color: '#E3C47E', shadow: 0 }
+        { id: uid(), name: 'Text 1', text: 'ތިމަންރަސްކަލާނގެ ރަޙްމަތަކީ ހުރިހާ އެއްޗެއް ފުޅާވެފައިވާ އެއްޗެކެވެ.', font: OVERLAY_FONT, size: 66, weight: 700, align: 'center', x: 50, y: 42, width: 80, lh: 1.8, color: '#F6F1E3', shadow: 1 },
+        { id: uid(), name: 'Text 2', text: 'ސޫރަތުލް އަޢްރާފް ― 156', font: OVERLAY_FONT, size: 34, weight: 400, align: 'center', x: 50, y: 68, width: 70, lh: 1.6, color: '#E3C47E', shadow: 0 }
       ], sel: null
     }
   };
@@ -737,7 +738,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; p.headline = { font: 'Noto Sans Thaana', locked: false, ...p.headline }; p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; p.headline = { font: OVERLAY_FONT, locked: false, ...p.headline }; p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -789,7 +790,7 @@ function drawLowerThird(c, W, H, hl, lt, remain) {
   const s = Math.min(W, H) / 1080, pad = 48 * s, fs = 44 * s;
   const sports = S.mode === 'sports', col = sports ? '#DE5638' : '#1C7FC0';
   c.save();
-  const HF = `"${hl.font || 'Noto Sans Thaana'}", ${TH}`;
+  const HF = `"${hl.font || OVERLAY_FONT}", ${TH}`;
   c.font = `700 ${fs}px ${HF}`; const rtl = RTL_RE.test(hl.text); c.direction = rtl ? 'rtl' : 'ltr';
   const maxW = W - pad * 2, lines = wrap(c, hl.text, maxW - 56 * s).slice(0, 3);
   const lineH = fs * 1.75, boxH = lines.length * lineH + 26 * s;
@@ -1156,8 +1157,8 @@ function renderInspector() {
   if (sel && sel.type === 'headline') {
     const lk = !!p.headline.locked, dis = lk ? 'disabled' : '';
     el.innerHTML = `<div class="row"><b>Headline</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : '<span class="muted">over your clips</span>'}</div>
-      <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis} style="font-family:'${esc(p.headline.font)}', var(--f-thaana)">${esc(p.headline.text)}</textarea>
-      <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(p.headline.font)}</select></div>
+      <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis}>${esc(p.headline.text)}</textarea>
+      <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(p.headline.font)}</select></div>${fontOk[p.headline.font] === false ? `<span class="muted">${esc(p.headline.font)} isn't installed here, so the video uses Noto Sans Thaana. <button class="linkbtn" data-addfont="${esc(p.headline.font)}">Add ${esc(p.headline.font)} file</button></span>` : ''}
       <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(p.headline.tag)}" style="max-width:160px;font-family:var(--f-thaana)"></div>`;
     return;
   }
@@ -1250,7 +1251,6 @@ function renderFormat() {
   $('#layerTextLbl').textContent = `Selected Text · ${l.name}${l.locked ? ' (locked)' : ''}`;
   $('#layerText').readOnly = !!l.locked;
   if (document.activeElement !== $('#layerText')) $('#layerText').value = l.text;
-  $('#layerText').style.fontFamily = `"${l.font}", var(--f-thaana)`;
   $('#fFont').innerHTML = fontOptions(l.font);
   [['fSize', 'oSize', l.size, v => v + 'px'], ['fX', 'oX', l.x, posFmt], ['fY', 'oY', l.y, posFmt], ['fWidth', 'oWidth', l.width, v => v + '%'], ['fLh', 'oLh', l.lh, v => (+v).toFixed(2)]]
     .forEach(([i, o, v, f]) => { $('#' + i).value = v; $('#' + o).textContent = f(v); });
@@ -1504,7 +1504,7 @@ $('#layers').addEventListener('click', e => {
 $('#addLayerBtn').addEventListener('click', () => {
   const Q = q(), bg = BGS.find(b => b.id === Q.bg) || BGS[0];
   const n = Q.layers.reduce((a, l) => Math.max(a, +(l.name.match(/\d+/) || [0])[0]), 0) + 1;
-  const l = { id: uid(), name: `Text ${n}`, text: 'ނަމޫނާ ޓެކްސްޓް', font: 'MV Typewriter', size: 40, weight: 400, align: 'center', x: 50, y: 20, width: 70, lh: 1.7, color: bgPalette()[0], shadow: 0, locked: false };
+  const l = { id: uid(), name: `Text ${n}`, text: 'ނަމޫނާ ޓެކްސްޓް', font: OVERLAY_FONT, size: 40, weight: 400, align: 'center', x: 50, y: 20, width: 70, lh: 1.7, color: bgPalette()[0], shadow: 0, locked: false };
   Q.layers.push(l); Q.sel = l.id; renderQuoteUI(); scheduleDraw(); $('#layerText').focus(); $('#layerText').select();
 });
 const SNAP = 2;
@@ -1586,6 +1586,7 @@ async function checkFonts() {
   }
 }
 $('#fontUpBtn').addEventListener('click', () => { S.fontTarget = null; $('#fontIn').click(); });
+$('#inspector').addEventListener('click', e => { const b = e.target.closest('[data-addfont]'); if (!b) return; S.fontTarget = b.dataset.addfont; $('#fontIn').click(); });
 $('#fontNote').addEventListener('click', e => { const b = e.target.closest('[data-addfont]'); if (!b) return; S.fontTarget = b.dataset.addfont; $('#fontIn').click(); });
 $('#fontIn').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -1881,7 +1882,6 @@ async function boot() {
   await checkFonts();
   if (!restored) {
     $('#status').textContent = 'Sample project · upload your clips to start';
-    if (fontOk.Faruma) ['sports', 'moosun'].forEach(k => { P[k].headline.font = 'Faruma'; });
   }
   GEN.forEach(g => { media.get(g.id).thumb = genThumb(media.get(g.id)); });
   bgThumbs = null; renderAll();
