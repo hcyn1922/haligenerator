@@ -886,7 +886,7 @@ function textRange(p, tx) {
 }
 const curText = () => { const p = proj(); return S.sel && S.sel.type === 'text' && p.texts ? p.texts.find(x => x.id === S.sel.id) || null : null; };
 /* headline layout: box size and centre; x/y are the box centre in % of the frame (null = default bottom corner) */
-const HL_DEFAULT = () => S.mode === 'sports' ? '#DE5638' : '#1C7FC0';
+const HL_DEFAULT = () => '#00AEEF'; /* default text background, both video generators */
 const mctx = document.createElement('canvas').getContext('2d');
 function lum(hex) { const n = parseInt(String(hex).replace('#', ''), 16); const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(n >> 16 & 255) + .7152 * f(n >> 8 & 255) + .0722 * f(n & 255); }
 function hlLayout(c, W, H, hl) {
