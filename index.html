@@ -179,6 +179,10 @@ body.collapsed .side-foot{justify-content:center;padding:12px 0}
 .trim::after{content:"";width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,.85)}
 .trim:hover{background:rgba(255,255,255,.22)}
 .clip.text.trimming{box-shadow:0 0 0 2px var(--fg)}
+.tplus{position:absolute;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;border:2px solid var(--sunk);background:var(--ink);color:var(--ink-fg);font-weight:600;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;z-index:3}
+.tplus:hover{transform:scale(1.12)}
+.lane-add{position:absolute;inset:0;border:0;background:transparent;text-align:left;padding:0 12px;font-size:12px;color:var(--muted);border-radius:8px}
+.lane-add:hover{color:var(--fg);background:var(--hover)}
 .tl-labels{display:flex;flex-direction:column;gap:6px}
 .tl-labels .ruler-l{height:18px}
 .tl-lab{height:36px;border-radius:8px;background:var(--sunk);display:flex;align-items:center;gap:2px;padding:0 3px 0 9px;font-weight:600;font-size:12px}
@@ -761,7 +765,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map(tx => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, ...tx, id: tx.id || uid() })); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map((tx, i) => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, track: i, ...tx, id: tx.id || uid() })); if (p.tCount == null) { p.tCount = p.texts.length; p.tLocks = p.texts.map(t => !!t.locked); } p.tCount = Math.max(p.tCount, ...p.texts.map(t => t.track + 1)); p.tLocks = Array.from({ length: p.tCount }, (_, i) => !!(p.tLocks || [])[i]); p.texts.forEach(t => { t.locked = p.tLocks[t.track]; }); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -807,7 +811,7 @@ function drawVideo(c, W, H, t) {
     else if (m.kind === 'video' && m.el && m.el.readyState >= 2) drawCover(c, m.el, m.el.videoWidth, m.el.videoHeight, W, H, hit.c.zoom || 1, hit.c.ox, hit.c.oy);
   }
   const ur = userRange(p);
-  (p.texts || []).forEach(tx => { if (!tx.text) return; const r = textRange(p, tx); if (r && t >= r[0] && t < r[1]) drawLowerThird(c, W, H, tx, t - r[0], r[1] - t); });
+  [...(p.texts || [])].sort((a, b) => a.track - b.track).forEach(tx => { if (!tx.text) return; const r = textRange(p, tx); if (r && t >= r[0] && t < r[1]) drawLowerThird(c, W, H, tx, t - r[0], r[1] - t); });
 }
 /* when a text layer shows: its own start/end, or (null) the span of your clips */
 function textRange(p, tx) {
@@ -1123,9 +1127,9 @@ function renderTimeline() {
   const inner = Math.max(avail, T * pps + 30);
   const ur = userRange(p);
   let L = '<div class="tl-labels"><div class="ruler-l"></div>';
-  L += p.texts.length
-    ? p.texts.map((tx, i) => `<div class="tl-lab ${tx.locked ? 'locked' : ''}" title="Text layer ${i + 1}"><span class="nm">T${i + 1}</span><button class="addt" data-addtext="${i}" aria-label="Add a text layer" title="Add a text layer">+</button>${lockBtn(`data-tlock="t" data-ti="${i}"`, !!tx.locked, `text layer T${i + 1}`)}${delBtn(`data-tdel="t" data-ti="${i}"`, !!tx.locked, `text layer T${i + 1}`)}</div>`).join('')
-    : '<button class="tl-add" data-act="add-text" aria-label="Add a text layer" title="Add a text layer">+</button>';
+  L += p.tCount
+    ? Array.from({ length: p.tCount }, (_, i) => { const lk = !!p.tLocks[i]; return `<div class="tl-lab ${lk ? 'locked' : ''}" title="Text track T${i + 1}"><span class="nm">T${i + 1}</span><button class="addt" data-addtext="${i}" aria-label="Add a text track below T${i + 1}" title="Add a text track">+</button>${lockBtn(`data-tlock="t" data-ti="${i}"`, lk, `text track T${i + 1}`)}${delBtn(`data-tdel="t" data-ti="${i}"`, lk, `text track T${i + 1}`)}</div>`; }).join('')
+    : '<button class="tl-add" data-act="add-text" aria-label="Add a text track" title="Add a text track">+</button>';
   L += `<div class="tl-lab ${p.vLocked ? 'locked' : ''}" title="Video track"><span class="nm">V1</span>${lockBtn('data-tlock="v"', !!p.vLocked, 'video track')}</div>`;
   p.audio.forEach((_, i) => { const lk = !!p.aLocks[i]; L += `<div class="tl-lab ${lk ? 'locked' : ''}" title="Audio track"><span class="nm">A${i + 1}</span>${lockBtn(`data-tlock="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}${delBtn(`data-tdel="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}</div>`; });
   L += '<button class="tl-add" data-act="add-audio" aria-label="Add audio track" title="Add audio track">+</button></div>';
@@ -1137,18 +1141,22 @@ function renderTimeline() {
     if (maj) R += `<em style="left:${s * pps}px">${s}s</em>`;
   }
   R += '</div>';
-  if (p.texts.length) p.texts.forEach((tx, i) => {
-    const r = textRange(p, tx), sel = S.sel?.type === 'text' && S.sel.id === tx.id, lk = !!tx.locked;
+  for (let i = 0; i < p.tCount; i++) {
+    const lk = !!p.tLocks[i], mine = p.texts.filter(tx => tx.track === i).map(tx => ({ tx, r: textRange(p, tx) })).filter(o => o.r).sort((x, y) => x.r[0] - y.r[0]);
     R += `<div class="lane ${lk ? 'locked' : ''}" data-lane="text" data-ti="${i}">`;
-    if (r) R += `<div role="button" tabindex="0" class="clip text ${sel ? 'sel' : ''}" data-hl="${tx.id}" style="left:${r[0] * pps}px;width:${Math.max(12, (r[1] - r[0]) * pps - 2)}px" title="${esc(tx.text || 'Empty text')} · ${fmtT(r[0])} to ${fmtT(r[1])}">`
-      + (lk ? '' : '<span class="trim l" data-trim="start" title="Drag to change when the text appears"></span>')
-      + `<span class="nm" dir="auto">${esc(tx.text || 'Empty text')}</span>`
-      + (sel && !lk ? `<button class="cdel" data-xdel="${tx.id}" aria-label="Delete text layer T${i + 1}" title="Delete text layer (Delete key)">${ICON('i-trash')}</button>` : '')
-      + (lk ? '' : '<span class="trim r" data-trim="end" title="Drag to change when the text disappears"></span>') + '</div>';
-    else R += '<span class="hint">Add clips to the timeline to show this text</span>';
+    if (!mine.length) R += lk ? '<span class="hint">Empty text track</span>' : `<button class="lane-add" data-addon="${i}">+ Add text here</button>`;
+    mine.forEach(({ tx, r }, k) => {
+      const sel = S.sel?.type === 'text' && S.sel.id === tx.id, nextStart = k + 1 < mine.length ? mine[k + 1].r[0] : T;
+      R += `<div role="button" tabindex="0" class="clip text ${sel ? 'sel' : ''}" data-hl="${tx.id}" style="left:${r[0] * pps}px;width:${Math.max(12, (r[1] - r[0]) * pps - 2)}px" title="${esc(tx.text || 'Empty text')} · ${fmtT(r[0])} to ${fmtT(r[1])}">`
+        + (lk ? '' : '<span class="trim l" data-trim="start" title="Drag to change when the text appears"></span>')
+        + `<span class="nm" dir="auto">${esc(tx.text || 'Empty text')}</span>`
+        + (sel && !lk ? `<button class="cdel" data-xdel="${tx.id}" aria-label="Delete this text" title="Delete text (Delete key)">${ICON('i-trash')}</button>` : '')
+        + (lk ? '' : '<span class="trim r" data-trim="end" title="Drag to change when the text disappears"></span>') + '</div>';
+      if (!lk && nextStart - r[1] >= .3) R += `<button class="tplus" data-addafter="${tx.id}" style="left:${r[1] * pps + 13}px" aria-label="Add text after this one on T${i + 1}" title="Add text after this one">+</button>`;
+    });
     R += '</div>';
-  });
-  else R += '<div class="lane ghost" data-act="add-text">Add a text layer</div>';
+  }
+  if (!p.tCount) R += '<div class="lane ghost" data-act="add-text">Add a text track</div>';
 
   R += `<div class="lane ${p.vLocked ? 'locked' : ''}" data-lane="v">`;
   let acc = 0, plusAt = null;
@@ -1208,8 +1216,8 @@ function renderInspector() {
   const el = $('#inspector'), p = proj(), sel = S.sel;
   if (sel && sel.type === 'text') {
     const tx = curText(); if (!tx) { S.sel = null; el.innerHTML = ''; return; }
-    const i = p.texts.indexOf(tx), r = textRange(p, tx) || [0, 0], lk = !!tx.locked, dis = lk ? 'disabled' : '', T = vTotal(p);
-    el.innerHTML = `<div class="row"><b>Text layer T${i + 1}</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : `<span class="muted">${fmtT(r[0])} to ${fmtT(r[1])}</span>`}</div>
+    const i = tx.track, r = textRange(p, tx) || [0, 0], lk = !!tx.locked, dis = lk ? 'disabled' : '', T = vTotal(p);
+    el.innerHTML = `<div class="row"><b>Text on T${i + 1}</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : `<span class="muted">${fmtT(r[0])} to ${fmtT(r[1])}</span>`}</div>
       <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis}>${esc(tx.text)}</textarea>
       <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(tx.font)}</select></div>${fontOk[tx.font] === false ? `<span class="muted">${esc(tx.font)} isn't installed here, so the video uses Noto Sans Thaana. <button class="linkbtn" data-addfont="${esc(tx.font)}">Add ${esc(tx.font)} file</button></span>` : ''}
       <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(tx.tag)}" placeholder="Optional" style="max-width:160px;font-family:var(--f-thaana)"></div>
@@ -1257,27 +1265,64 @@ function showText(tx) {
   const r = tx && textRange(proj(), tx); if (!r || playing) return;
   if (playT < r[0] + .6 || playT > r[1] - .3) seek(Math.min(r[0] + .8, (r[0] + r[1]) / 2));
 }
+/* free space on a text clip's track: the clips either side bound it */
+function trackBounds(p, tx) {
+  const r = textRange(p, tx) || [0, 0], T = vTotal(p); let lo = 0, hi = T;
+  p.texts.forEach(o => { if (o === tx || o.track !== tx.track) return; const q = textRange(p, o); if (!q) return; if (q[1] <= r[0] + .01) lo = Math.max(lo, q[1]); else if (q[0] >= r[1] - .01) hi = Math.min(hi, q[0]); });
+  return [lo, hi];
+}
+function addTextClip(track, st, base) {
+  if (exporting) return;
+  const p = proj(), T = vTotal(p);
+  if (p.tLocks[track]) { toast(`T${track + 1} is locked. Unlock it to add text.`); return; }
+  const others = p.texts.filter(x => x.track === track).map(x => textRange(p, x)).filter(Boolean).sort((a, b) => a[0] - b[0]);
+  st = Math.round(clamp(st, 0, T) * 10) / 10;
+  others.forEach(r => { if (st >= r[0] - .01 && st < r[1]) st = r[1]; });
+  const next = Math.min(T, ...others.filter(r => r[0] >= st - .01).map(r => r[0]));
+  const en = Math.min(next, st + 3);
+  if (en - st < .3) { toast('There is no room for more text there. Trim the text next to it first.'); return; }
+  const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: base ? base.tag : '', font: base ? base.font : OVERLAY_FONT, locked: false, bgOn: base ? base.bgOn : true, bg: base ? base.bg : null,
+    x: base ? base.x : 50, y: base ? base.y : clamp(18 + track * 14, 10, 80), track, start: st, end: Math.round(en * 10) / 10 };
+  p.texts.push(tx);
+  S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
+  toast(`Text added on T${track + 1} at ${fmtT(st)}. Drag its ends to change how long it shows.`);
+}
 function addText(after) {
   if (exporting) return;
-  const p = proj(), T = vTotal(p), n = p.texts.length, base = p.texts[after] || {};
-  const st = clamp(playT, 0, Math.max(0, T - .5)), en = Math.min(T, st + 3);
-  const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: '', font: base.font || OVERLAY_FONT, locked: false, bgOn: base.bgOn ?? true, bg: base.bg ?? null,
-    x: n ? 50 : null, y: n ? clamp(18 + (n - 1) * 14, 10, 80) : null, start: n ? st : null, end: n ? en : null };
-  p.texts.splice(after == null ? n : after + 1, 0, tx);
-  S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
-  toast(n ? `Text layer added at ${fmtT(st)}. Drag its ends on the timeline to change how long it shows.` : 'Text layer added over your clips.');
+  const p = proj();
+  if (!p.tCount) {
+    p.tCount = 1; p.tLocks = [false];
+    const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, track: 0, start: null, end: null };
+    p.texts.push(tx); S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
+    toast('Text track added over your clips.'); return;
+  }
+  const at = after == null ? p.tCount : after + 1;
+  p.texts.forEach(t => { if (t.track >= at) t.track++; });
+  p.tLocks.splice(at, 0, false); p.tCount++;
+  addTextClip(at, Math.min(playT, Math.max(0, vTotal(p) - .5)), null);
+  renderTimeline();
+}
+function deleteTrack(i) {
+  const p = proj(); if (exporting) return;
+  if (p.tLocks[i]) { toast(`T${i + 1} is locked. Unlock it to delete it.`); return; }
+  const n = p.texts.filter(t => t.track === i).length;
+  p.texts = p.texts.filter(t => t.track !== i); p.texts.forEach(t => { if (t.track > i) t.track--; });
+  p.tLocks.splice(i, 1); p.tCount--;
+  if (S.sel?.type === 'text' && !curText()) S.sel = null;
+  toast(`Text track deleted${n ? ` with ${n} text${n > 1 ? 's' : ''}` : ''}.`);
+  renderTimeline(); renderInspector(); scheduleDraw();
 }
 function deleteText(id) {
   const p = proj(), tx = p.texts.find(x => x.id === id); if (!tx || exporting) return;
-  if (tx.locked) { toast('That text layer is locked. Unlock it to delete it.'); return; }
+  if (tx.locked) { toast(`T${tx.track + 1} is locked. Unlock it to delete text.`); return; }
   p.texts = p.texts.filter(x => x.id !== id); if (S.sel?.id === id) S.sel = null;
-  toast(p.texts.length ? 'Text layer deleted.' : 'Text layer deleted. Use + on the timeline to add one again.');
+  toast('Text deleted. The track stays: click it to add text again.');
   renderTimeline(); renderInspector(); scheduleDraw();
 }
 function renderClipActs() {
   const el = $('#clipActs'); if (!el) return;
   const tx = curText();
-  if (tx) { const i = proj().texts.indexOf(tx); el.innerHTML = `<span class="nm">Text layer T${i + 1}</span><button class="btn small danger" data-xdel="${tx.id}" ${tx.locked ? 'disabled' : ''}>${ICON('i-trash')} Delete</button>`; return; }
+  if (tx) { const i = tx.track; el.innerHTML = `<span class="nm">Text on T${i + 1}</span><button class="btn small danger" data-xdel="${tx.id}" ${tx.locked ? 'disabled' : ''}>${ICON('i-trash')} Delete</button>`; return; }
   const f = S.sel && S.sel.type === 'clip' && findClip(S.sel.id);
   if (!f) { el.innerHTML = ''; return; }
   const m = media.get(f.c.mid), name = f.c.role ? (f.c.role === 'intro' ? 'Intro' : 'Outro') : (m ? m.name : 'Clip'), dis = f.locked ? 'disabled' : '';
@@ -1455,19 +1500,21 @@ $('#tl').addEventListener('click', e => {
   const p = proj();
   const xd = e.target.closest('[data-xdel]'); if (xd) { deleteText(xd.dataset.xdel); return; }
   const at = e.target.closest('[data-addtext]'); if (at) { addText(+at.dataset.addtext); return; }
+  const aa = e.target.closest('[data-addafter]'); if (aa) { const tx = p.texts.find(x => x.id === aa.dataset.addafter); const r = tx && textRange(p, tx); if (r) addTextClip(tx.track, r[1], tx); return; }
+  const ao = e.target.closest('[data-addon]'); if (ao) { addTextClip(+ao.dataset.addon, playT, null); return; }
   const cdel = e.target.closest('[data-cdel]');
   if (cdel) { S.sel = { type: 'clip', id: cdel.dataset.cdel }; clipAction('rm'); return; }
   const lockB = e.target.closest('[data-tlock]');
   if (lockB) {
     const k = lockB.dataset.tlock;
-    if (k === 't') { const tx = p.texts[+lockB.dataset.ti]; if (tx) tx.locked = !tx.locked; }
+    if (k === 't') { const i = +lockB.dataset.ti; p.tLocks[i] = !p.tLocks[i]; p.texts.forEach(t => { if (t.track === i) t.locked = p.tLocks[i]; }); }
     else if (k === 'v') p.vLocked = !p.vLocked;
     else { const i = +lockB.dataset.track; p.aLocks[i] = !p.aLocks[i]; }
     renderTimeline(); renderInspector(); return;
   }
   const delB = e.target.closest('[data-tdel]');
   if (delB) {
-    if (delB.dataset.tdel === 't') { const tx = p.texts[+delB.dataset.ti]; if (tx) deleteText(tx.id); return; }
+    if (delB.dataset.tdel === 't') { deleteTrack(+delB.dataset.ti); return; }
     else { const i = +delB.dataset.track; const n = p.audio[i].length; p.audio.splice(i, 1); p.aLocks.splice(i, 1); if (S.sel && !findClip(S.sel.id)) S.sel = null; toast(`Audio track deleted${n ? ` with ${n} clip${n > 1 ? 's' : ''}` : ''}.`); }
     syncMedia(playT, playing); renderTimeline(); renderInspector(); scheduleDraw(); return;
   }
@@ -1491,7 +1538,8 @@ $('#tl').addEventListener('pointerdown', e => {
   const el = h.closest('[data-hl]'), p = proj(), tx = p.texts.find(x => x.id === el.dataset.hl); if (!tx || tx.locked) return;
   const r = textRange(p, tx); if (!r) return;
   e.preventDefault(); e.stopPropagation(); if (playing) pause();
-  trimD = { tx, el, edge: h.dataset.trim, s: r[0], e: r[1], x0: e.clientX, T: vTotal(p), moved: false };
+  const [lo, hi] = trackBounds(p, tx);
+  trimD = { tx, el, edge: h.dataset.trim, s: r[0], e: r[1], lo, hi, x0: e.clientX, T: vTotal(p), moved: false };
   el.classList.add('trimming'); h.setPointerCapture(e.pointerId);
 });
 $('#tl').addEventListener('pointermove', e => {
@@ -1499,7 +1547,8 @@ $('#tl').addEventListener('pointermove', e => {
   if (Math.abs(e.clientX - d.x0) > 2) d.moved = true; if (!d.moved) return;
   const dt = (e.clientX - d.x0) / S.pps, snap = v => Math.round(v * 10) / 10;
   let st = d.s, en = d.e;
-  if (d.edge === 'start') st = clamp(snap(d.s + dt), 0, d.e - .3); else en = clamp(snap(d.e + dt), d.s + .3, d.T);
+  if (d.edge === 'start') st = clamp(snap(d.s + dt), d.lo, d.e - .3); else en = clamp(snap(d.e + dt), d.s + .3, d.hi);
+  const pl = d.el.nextElementSibling; if (pl && pl.classList.contains('tplus')) pl.hidden = true;
   d.tx.start = st; d.tx.end = en;
   d.el.style.left = st * S.pps + 'px'; d.el.style.width = Math.max(12, (en - st) * S.pps - 2) + 'px';
   d.el.title = `${fmtT(st)} to ${fmtT(en)}`;
@@ -1508,7 +1557,7 @@ $('#tl').addEventListener('pointermove', e => {
 function endTrim() {
   const d = trimD; if (!d) return; trimD = null;
   S.sel = { type: 'text', id: d.tx.id }; S.trimClick = true; setTimeout(() => { S.trimClick = false; }, 0);
-  if (d.moved) toast(`T${proj().texts.indexOf(d.tx) + 1} shows ${fmtT(d.tx.start)} to ${fmtT(d.tx.end)}.`);
+  if (d.moved) toast(`Text on T${d.tx.track + 1} shows ${fmtT(d.tx.start)} to ${fmtT(d.tx.end)}.`);
   renderTimeline(); renderInspector();
 }
 $('#tl').addEventListener('pointerup', endTrim);
@@ -1523,7 +1572,7 @@ document.addEventListener('dragstart', e => {
   e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', dragData.id);
 });
 document.addEventListener('dragend', () => { dragData = null; $$('.dragging,.drop').forEach(x => x.classList.remove('dragging', 'drop')); });
-function laneLocked(lane) { const p = proj(); return lane.dataset.lane === 'v' ? !!p.vLocked : lane.dataset.lane === 'a' ? !!p.aLocks[+lane.dataset.track] : !!(p.texts[+lane.dataset.ti] || {}).locked; }
+function laneLocked(lane) { const p = proj(); return lane.dataset.lane === 'v' ? !!p.vLocked : lane.dataset.lane === 'a' ? !!p.aLocks[+lane.dataset.track] : !!p.tLocks[+lane.dataset.ti]; }
 $('#tl').addEventListener('dragover', e => { const lane = e.target.closest('.lane[data-lane]'); if (!lane || !dragData || laneLocked(lane)) return; e.preventDefault(); $$('.lane.drop').forEach(x => x !== lane && x.classList.remove('drop')); lane.classList.add('drop'); });
 $('#tl').addEventListener('dragleave', e => { const lane = e.target.closest('.lane'); if (lane && !lane.contains(e.relatedTarget)) lane.classList.remove('drop'); });
 $('#tl').addEventListener('drop', e => {
@@ -1565,9 +1614,9 @@ $('#inspector').addEventListener('change', e => {
   if (['hlColor', 'hlX', 'hlY'].includes(e.target.id)) { renderInspector(); return; }
   const p = proj(), tx = curText();
   if ((e.target.id === 'hlStart' || e.target.id === 'hlEnd') && tx && !tx.locked) {
-    const T = vTotal(p), r = textRange(p, tx) || [0, T], v = parseFloat(e.target.value);
+    const T = vTotal(p), r = textRange(p, tx) || [0, T], v = parseFloat(e.target.value), [lo, hi] = trackBounds(p, tx);
     let st = r[0], en = r[1];
-    if (!isNaN(v)) { if (e.target.id === 'hlStart') st = clamp(v, 0, en - .3); else en = clamp(v, st + .3, T); }
+    if (!isNaN(v)) { if (e.target.id === 'hlStart') st = clamp(v, lo, en - .3); else en = clamp(v, st + .3, hi); }
     tx.start = Math.round(st * 10) / 10; tx.end = Math.round(en * 10) / 10;
     renderTimeline(); renderInspector(); showText(tx); scheduleDraw(); return;
   }
