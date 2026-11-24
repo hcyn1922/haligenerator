@@ -171,7 +171,14 @@ body.collapsed .side-foot{justify-content:center;padding:12px 0}
 .tl-head{display:flex;align-items:center;gap:8px;min-height:26px}
 .tl-head .sp{flex:1}
 #tlRestore{display:flex;gap:6px}
-.tl{display:grid;grid-template-columns:78px minmax(0,1fr);gap:0 8px}
+.tl{display:grid;grid-template-columns:104px minmax(0,1fr);gap:0 8px}
+.tl-lab button.addt{font-size:16px;font-weight:500;line-height:1;color:var(--fg)}
+.clip.text{padding:0 12px}
+.trim{position:absolute;top:0;bottom:0;width:10px;cursor:ew-resize;touch-action:none;z-index:2;display:flex;align-items:center;justify-content:center}
+.trim.l{left:0}.trim.r{right:0}
+.trim::after{content:"";width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,.85)}
+.trim:hover{background:rgba(255,255,255,.22)}
+.clip.text.trimming{box-shadow:0 0 0 2px var(--fg)}
 .tl-labels{display:flex;flex-direction:column;gap:6px}
 .tl-labels .ruler-l{height:18px}
 .tl-lab{height:36px;border-radius:8px;background:var(--sunk);display:flex;align-items:center;gap:2px;padding:0 3px 0 9px;font-weight:600;font-size:12px}
@@ -754,7 +761,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; p.headline = { font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, ...p.headline }; p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map(tx => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, ...tx, id: tx.id || uid() })); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -800,8 +807,15 @@ function drawVideo(c, W, H, t) {
     else if (m.kind === 'video' && m.el && m.el.readyState >= 2) drawCover(c, m.el, m.el.videoWidth, m.el.videoHeight, W, H, hit.c.zoom || 1, hit.c.ox, hit.c.oy);
   }
   const ur = userRange(p);
-  if (p.headline.on && p.headline.text && ur && !hit.c.role) drawLowerThird(c, W, H, p.headline, t - ur[0], ur[1] - t);
+  (p.texts || []).forEach(tx => { if (!tx.text) return; const r = textRange(p, tx); if (r && t >= r[0] && t < r[1]) drawLowerThird(c, W, H, tx, t - r[0], r[1] - t); });
 }
+/* when a text layer shows: its own start/end, or (null) the span of your clips */
+function textRange(p, tx) {
+  const T = vTotal(p), ur = userRange(p);
+  const s = clamp(tx.start ?? (ur ? ur[0] : 0), 0, T), e = clamp(tx.end ?? (ur ? ur[1] : T), 0, T);
+  return e - s >= .1 ? [s, e] : null;
+}
+const curText = () => { const p = proj(); return S.sel && S.sel.type === 'text' && p.texts ? p.texts.find(x => x.id === S.sel.id) || null : null; };
 /* headline layout: box size and centre; x/y are the box centre in % of the frame (null = default bottom corner) */
 const HL_DEFAULT = () => S.mode === 'sports' ? '#DE5638' : '#1C7FC0';
 const mctx = document.createElement('canvas').getContext('2d');
@@ -1104,14 +1118,14 @@ function delBtn(attr, locked, label) {
 function renderTimeline() {
   if (!isVideo()) return;
   const p = proj(), T = vTotal(p), tl = $('#tl');
-  const avail = Math.max(240, (tl.clientWidth || 600) - 86);
+  const avail = Math.max(240, (tl.clientWidth || 600) - 112);
   const pps = S.pps = clamp((avail - 30) / Math.max(T, 1), 22, 140);
   const inner = Math.max(avail, T * pps + 30);
   const ur = userRange(p);
   let L = '<div class="tl-labels"><div class="ruler-l"></div>';
-  L += p.headline.on
-    ? `<div class="tl-lab ${p.headline.locked ? 'locked' : ''}" title="Headline track"><span class="nm">T1</span>${lockBtn('data-tlock="t"', !!p.headline.locked, 'headline track')}${delBtn('data-tdel="t"', !!p.headline.locked, 'headline track')}</div>`
-    : '<button class="tl-add" data-act="add-text" aria-label="Add headline track" title="Add headline track">+</button>';
+  L += p.texts.length
+    ? p.texts.map((tx, i) => `<div class="tl-lab ${tx.locked ? 'locked' : ''}" title="Text layer ${i + 1}"><span class="nm">T${i + 1}</span><button class="addt" data-addtext="${i}" aria-label="Add a text layer" title="Add a text layer">+</button>${lockBtn(`data-tlock="t" data-ti="${i}"`, !!tx.locked, `text layer T${i + 1}`)}${delBtn(`data-tdel="t" data-ti="${i}"`, !!tx.locked, `text layer T${i + 1}`)}</div>`).join('')
+    : '<button class="tl-add" data-act="add-text" aria-label="Add a text layer" title="Add a text layer">+</button>';
   L += `<div class="tl-lab ${p.vLocked ? 'locked' : ''}" title="Video track"><span class="nm">V1</span>${lockBtn('data-tlock="v"', !!p.vLocked, 'video track')}</div>`;
   p.audio.forEach((_, i) => { const lk = !!p.aLocks[i]; L += `<div class="tl-lab ${lk ? 'locked' : ''}" title="Audio track"><span class="nm">A${i + 1}</span>${lockBtn(`data-tlock="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}${delBtn(`data-tdel="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}</div>`; });
   L += '<button class="tl-add" data-act="add-audio" aria-label="Add audio track" title="Add audio track">+</button></div>';
@@ -1123,12 +1137,18 @@ function renderTimeline() {
     if (maj) R += `<em style="left:${s * pps}px">${s}s</em>`;
   }
   R += '</div>';
-  if (p.headline.on) {
-    R += `<div class="lane ${p.headline.locked ? 'locked' : ''}" data-lane="text">`;
-    if (ur) R += `<div role="button" tabindex="0" class="clip text ${S.sel?.type === 'headline' ? 'sel' : ''}" data-hl="1" style="left:${ur[0] * pps}px;width:${(ur[1] - ur[0]) * pps - 2}px"><span class="nm" dir="auto">${esc(p.headline.text || 'Headline')}</span></div>`;
-    else R += '<span class="hint">Headline shows over your clips</span>';
+  if (p.texts.length) p.texts.forEach((tx, i) => {
+    const r = textRange(p, tx), sel = S.sel?.type === 'text' && S.sel.id === tx.id, lk = !!tx.locked;
+    R += `<div class="lane ${lk ? 'locked' : ''}" data-lane="text" data-ti="${i}">`;
+    if (r) R += `<div role="button" tabindex="0" class="clip text ${sel ? 'sel' : ''}" data-hl="${tx.id}" style="left:${r[0] * pps}px;width:${Math.max(12, (r[1] - r[0]) * pps - 2)}px" title="${esc(tx.text || 'Empty text')} · ${fmtT(r[0])} to ${fmtT(r[1])}">`
+      + (lk ? '' : '<span class="trim l" data-trim="start" title="Drag to change when the text appears"></span>')
+      + `<span class="nm" dir="auto">${esc(tx.text || 'Empty text')}</span>`
+      + (sel && !lk ? `<button class="cdel" data-xdel="${tx.id}" aria-label="Delete text layer T${i + 1}" title="Delete text layer (Delete key)">${ICON('i-trash')}</button>` : '')
+      + (lk ? '' : '<span class="trim r" data-trim="end" title="Drag to change when the text disappears"></span>') + '</div>';
+    else R += '<span class="hint">Add clips to the timeline to show this text</span>';
     R += '</div>';
-  } else R += '<div class="lane ghost" data-act="add-text">Add a headline track</div>';
+  });
+  else R += '<div class="lane ghost" data-act="add-text">Add a text layer</div>';
 
   R += `<div class="lane ${p.vLocked ? 'locked' : ''}" data-lane="v">`;
   let acc = 0, plusAt = null;
@@ -1186,12 +1206,18 @@ function fontOptions(cur) {
 function renderInspector() {
   renderClipActs();
   const el = $('#inspector'), p = proj(), sel = S.sel;
-  if (sel && sel.type === 'headline') {
-    const lk = !!p.headline.locked, dis = lk ? 'disabled' : '';
-    el.innerHTML = `<div class="row"><b>Headline</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : '<span class="muted">over your clips</span>'}</div>
-      <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis}>${esc(p.headline.text)}</textarea>
-      <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(p.headline.font)}</select></div>${fontOk[p.headline.font] === false ? `<span class="muted">${esc(p.headline.font)} isn't installed here, so the video uses Noto Sans Thaana. <button class="linkbtn" data-addfont="${esc(p.headline.font)}">Add ${esc(p.headline.font)} file</button></span>` : ''}
-      <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(p.headline.tag)}" style="max-width:160px;font-family:var(--f-thaana)"></div>` + headlineFormat(p.headline, dis);
+  if (sel && sel.type === 'text') {
+    const tx = curText(); if (!tx) { S.sel = null; el.innerHTML = ''; return; }
+    const i = p.texts.indexOf(tx), r = textRange(p, tx) || [0, 0], lk = !!tx.locked, dis = lk ? 'disabled' : '', T = vTotal(p);
+    el.innerHTML = `<div class="row"><b>Text layer T${i + 1}</b>${lk ? `<span class="pill-note">${ICON('i-lock')} Locked</span>` : `<span class="muted">${fmtT(r[0])} to ${fmtT(r[1])}</span>`}</div>
+      <label for="hlText">Text</label><textarea id="hlText" dir="auto" ${dis}>${esc(tx.text)}</textarea>
+      <div class="row"><label for="hlFont">Font</label><select id="hlFont" ${dis}>${fontOptions(tx.font)}</select></div>${fontOk[tx.font] === false ? `<span class="muted">${esc(tx.font)} isn't installed here, so the video uses Noto Sans Thaana. <button class="linkbtn" data-addfont="${esc(tx.font)}">Add ${esc(tx.font)} file</button></span>` : ''}
+      <div class="row"><label for="hlTag">Tag</label><input type="text" id="hlTag" dir="auto" ${dis} value="${esc(tx.tag)}" placeholder="Optional" style="max-width:160px;font-family:var(--f-thaana)"></div>
+      <div class="sub">Timing</div>
+      <div class="row"><label for="hlStart">Shows from (s)</label><input type="number" id="hlStart" min="0" max="${T.toFixed(1)}" step="0.1" value="${r[0].toFixed(1)}" ${dis}></div>
+      <div class="row"><label for="hlEnd">Until (s)</label><input type="number" id="hlEnd" min="0" max="${T.toFixed(1)}" step="0.1" value="${r[1].toFixed(1)}" ${dis}></div>
+      <span class="muted">Or drag either end of the text clip on the timeline.</span>
+      <div class="btns"><button class="btn small" data-hltime ${dis} ${tx.start == null && tx.end == null ? 'disabled' : ''}>Match my clips</button><button class="btn small danger" data-xdel="${tx.id}" ${dis}>${ICON('i-trash')} Delete text</button></div>` + headlineFormat(tx, dis);
     return;
   }
   const f = sel && findClip(sel.id);
@@ -1227,12 +1253,31 @@ function headlineFormat(hl, dis) {
     ${slider('hlX', 'wHX', 'oHX', xs, 'Position X')}${slider('hlY', 'wHY', 'oHY', ys, 'Position Y')}
     <div class="btns"><button class="btn small" data-hlreset ${dis} ${hl.x == null && hl.y == null ? 'disabled' : ''}>Reset position</button></div>`;
 }
-function showHeadline() {
-  const ur = userRange(proj()); if (!ur || playing) return;
-  if (playT < ur[0] + .8 || playT > ur[1] - .4) seek(Math.min(ur[0] + 1, (ur[0] + ur[1]) / 2));
+function showText(tx) {
+  const r = tx && textRange(proj(), tx); if (!r || playing) return;
+  if (playT < r[0] + .6 || playT > r[1] - .3) seek(Math.min(r[0] + .8, (r[0] + r[1]) / 2));
+}
+function addText(after) {
+  if (exporting) return;
+  const p = proj(), T = vTotal(p), n = p.texts.length, base = p.texts[after] || {};
+  const st = clamp(playT, 0, Math.max(0, T - .5)), en = Math.min(T, st + 3);
+  const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: '', font: base.font || OVERLAY_FONT, locked: false, bgOn: base.bgOn ?? true, bg: base.bg ?? null,
+    x: n ? 50 : null, y: n ? clamp(18 + (n - 1) * 14, 10, 80) : null, start: n ? st : null, end: n ? en : null };
+  p.texts.splice(after == null ? n : after + 1, 0, tx);
+  S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
+  toast(n ? `Text layer added at ${fmtT(st)}. Drag its ends on the timeline to change how long it shows.` : 'Text layer added over your clips.');
+}
+function deleteText(id) {
+  const p = proj(), tx = p.texts.find(x => x.id === id); if (!tx || exporting) return;
+  if (tx.locked) { toast('That text layer is locked. Unlock it to delete it.'); return; }
+  p.texts = p.texts.filter(x => x.id !== id); if (S.sel?.id === id) S.sel = null;
+  toast(p.texts.length ? 'Text layer deleted.' : 'Text layer deleted. Use + on the timeline to add one again.');
+  renderTimeline(); renderInspector(); scheduleDraw();
 }
 function renderClipActs() {
   const el = $('#clipActs'); if (!el) return;
+  const tx = curText();
+  if (tx) { const i = proj().texts.indexOf(tx); el.innerHTML = `<span class="nm">Text layer T${i + 1}</span><button class="btn small danger" data-xdel="${tx.id}" ${tx.locked ? 'disabled' : ''}>${ICON('i-trash')} Delete</button>`; return; }
   const f = S.sel && S.sel.type === 'clip' && findClip(S.sel.id);
   if (!f) { el.innerHTML = ''; return; }
   const m = media.get(f.c.mid), name = f.c.role ? (f.c.role === 'intro' ? 'Intro' : 'Outro') : (m ? m.name : 'Clip'), dis = f.locked ? 'disabled' : '';
@@ -1406,21 +1451,23 @@ $('#lib').addEventListener('click', e => {
 /* ---------------- events: timeline ---------------- */
 function timeFromX(clientX) { const r = $('#tlInner').getBoundingClientRect(); return clamp((clientX - r.left) / S.pps, 0, vTotal()); }
 $('#tl').addEventListener('click', e => {
-  if (exporting) return;
+  if (exporting || S.trimClick) return;
   const p = proj();
+  const xd = e.target.closest('[data-xdel]'); if (xd) { deleteText(xd.dataset.xdel); return; }
+  const at = e.target.closest('[data-addtext]'); if (at) { addText(+at.dataset.addtext); return; }
   const cdel = e.target.closest('[data-cdel]');
   if (cdel) { S.sel = { type: 'clip', id: cdel.dataset.cdel }; clipAction('rm'); return; }
   const lockB = e.target.closest('[data-tlock]');
   if (lockB) {
     const k = lockB.dataset.tlock;
-    if (k === 't') p.headline.locked = !p.headline.locked;
+    if (k === 't') { const tx = p.texts[+lockB.dataset.ti]; if (tx) tx.locked = !tx.locked; }
     else if (k === 'v') p.vLocked = !p.vLocked;
     else { const i = +lockB.dataset.track; p.aLocks[i] = !p.aLocks[i]; }
     renderTimeline(); renderInspector(); return;
   }
   const delB = e.target.closest('[data-tdel]');
   if (delB) {
-    if (delB.dataset.tdel === 't') { p.headline.on = false; if (S.sel?.type === 'headline') S.sel = null; toast('Headline track deleted. Use + to add it back.'); }
+    if (delB.dataset.tdel === 't') { const tx = p.texts[+delB.dataset.ti]; if (tx) deleteText(tx.id); return; }
     else { const i = +delB.dataset.track; const n = p.audio[i].length; p.audio.splice(i, 1); p.aLocks.splice(i, 1); if (S.sel && !findClip(S.sel.id)) S.sel = null; toast(`Audio track deleted${n ? ` with ${n} clip${n > 1 ? 's' : ''}` : ''}.`); }
     syncMedia(playT, playing); renderTimeline(); renderInspector(); scheduleDraw(); return;
   }
@@ -1428,15 +1475,44 @@ $('#tl').addEventListener('click', e => {
   if (act) {
     const a = act.dataset.act;
     if (a === 'add-audio') { p.audio.push([]); p.aLocks.push(false); renderTimeline(); }
-    else if (a === 'add-text') { p.headline.on = true; S.sel = { type: 'headline' }; renderTimeline(); renderInspector(); scheduleDraw(); }
+    else if (a === 'add-text') addText(null);
     else if (a === 'add-files') { S.pendingInsert = true; $('#fileIn').click(); }
     return;
   }
   const cb = e.target.closest('[data-cid],[data-aid]');
   if (cb) { S.sel = { type: 'clip', id: cb.dataset.cid || cb.dataset.aid }; seek(timeFromX(e.clientX)); renderTimeline(); renderInspector(); return; }
-  if (e.target.closest('[data-hl]')) { S.sel = { type: 'headline' }; seek(timeFromX(e.clientX)); renderTimeline(); renderInspector(); return; }
+  const hc = e.target.closest('[data-hl]'); if (hc) { S.sel = { type: 'text', id: hc.dataset.hl }; seek(timeFromX(e.clientX)); renderTimeline(); renderInspector(); return; }
   if (e.target.closest('#ruler') || e.target.closest('.lane')) seek(timeFromX(e.clientX));
 });
+/* trim a text clip by dragging either end */
+let trimD = null;
+$('#tl').addEventListener('pointerdown', e => {
+  const h = e.target.closest('[data-trim]'); if (!h || exporting) return;
+  const el = h.closest('[data-hl]'), p = proj(), tx = p.texts.find(x => x.id === el.dataset.hl); if (!tx || tx.locked) return;
+  const r = textRange(p, tx); if (!r) return;
+  e.preventDefault(); e.stopPropagation(); if (playing) pause();
+  trimD = { tx, el, edge: h.dataset.trim, s: r[0], e: r[1], x0: e.clientX, T: vTotal(p), moved: false };
+  el.classList.add('trimming'); h.setPointerCapture(e.pointerId);
+});
+$('#tl').addEventListener('pointermove', e => {
+  const d = trimD; if (!d) return;
+  if (Math.abs(e.clientX - d.x0) > 2) d.moved = true; if (!d.moved) return;
+  const dt = (e.clientX - d.x0) / S.pps, snap = v => Math.round(v * 10) / 10;
+  let st = d.s, en = d.e;
+  if (d.edge === 'start') st = clamp(snap(d.s + dt), 0, d.e - .3); else en = clamp(snap(d.e + dt), d.s + .3, d.T);
+  d.tx.start = st; d.tx.end = en;
+  d.el.style.left = st * S.pps + 'px'; d.el.style.width = Math.max(12, (en - st) * S.pps - 2) + 'px';
+  d.el.title = `${fmtT(st)} to ${fmtT(en)}`;
+  seek(d.edge === 'start' ? Math.min(st + .6, (st + en) / 2) : Math.max(en - .4, (st + en) / 2));
+});
+function endTrim() {
+  const d = trimD; if (!d) return; trimD = null;
+  S.sel = { type: 'text', id: d.tx.id }; S.trimClick = true; setTimeout(() => { S.trimClick = false; }, 0);
+  if (d.moved) toast(`T${proj().texts.indexOf(d.tx) + 1} shows ${fmtT(d.tx.start)} to ${fmtT(d.tx.end)}.`);
+  renderTimeline(); renderInspector();
+}
+$('#tl').addEventListener('pointerup', endTrim);
+$('#tl').addEventListener('pointercancel', endTrim);
 $('#tl').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')) { e.preventDefault(); e.target.click(); } });
 let dragData = null;
 document.addEventListener('dragstart', e => {
@@ -1447,7 +1523,7 @@ document.addEventListener('dragstart', e => {
   e.dataTransfer.effectAllowed = 'copyMove'; e.dataTransfer.setData('text/plain', dragData.id);
 });
 document.addEventListener('dragend', () => { dragData = null; $$('.dragging,.drop').forEach(x => x.classList.remove('dragging', 'drop')); });
-function laneLocked(lane) { const p = proj(); return lane.dataset.lane === 'v' ? !!p.vLocked : lane.dataset.lane === 'a' ? !!p.aLocks[+lane.dataset.track] : !!p.headline.locked; }
+function laneLocked(lane) { const p = proj(); return lane.dataset.lane === 'v' ? !!p.vLocked : lane.dataset.lane === 'a' ? !!p.aLocks[+lane.dataset.track] : !!(p.texts[+lane.dataset.ti] || {}).locked; }
 $('#tl').addEventListener('dragover', e => { const lane = e.target.closest('.lane[data-lane]'); if (!lane || !dragData || laneLocked(lane)) return; e.preventDefault(); $$('.lane.drop').forEach(x => x !== lane && x.classList.remove('drop')); lane.classList.add('drop'); });
 $('#tl').addEventListener('dragleave', e => { const lane = e.target.closest('.lane'); if (lane && !lane.contains(e.relatedTarget)) lane.classList.remove('drop'); });
 $('#tl').addEventListener('drop', e => {
@@ -1473,21 +1549,29 @@ $('#tl').addEventListener('drop', e => {
 
 /* ---------------- events: inspector ---------------- */
 $('#inspector').addEventListener('input', e => {
-  const p = proj();
-  if ((e.target.id === 'hlX' || e.target.id === 'hlY') && !p.headline.locked) {
-    const v = snapC(parseFloat(e.target.value)), k = e.target.id === 'hlX' ? 'x' : 'y'; e.target.value = v; p.headline[k] = v;
+  const p = proj(), tx = curText();
+  if (tx && tx.locked && e.target.id.startsWith('hl')) return;
+  if ((e.target.id === 'hlX' || e.target.id === 'hlY') && tx) {
+    const v = snapC(parseFloat(e.target.value)), k = e.target.id === 'hlX' ? 'x' : 'y'; e.target.value = v; tx[k] = v;
     $(k === 'x' ? '#oHX' : '#oHY').textContent = posFmt(v); $(k === 'x' ? '#wHX' : '#wHY').classList.toggle('on', v === 50);
-    showHeadline(); scheduleDraw(); return;
+    showText(curText()); scheduleDraw(); return;
   }
-  if (e.target.id === 'hlColor' && !p.headline.locked) { p.headline.bg = e.target.value; p.headline.bgOn = true; showHeadline(); scheduleDraw(); return; }
-  if (e.target.id === 'hlText') { p.headline.text = e.target.value; scheduleDraw(); clearTimeout(S.hlT); S.hlT = setTimeout(renderTimeline, 300); return; }
-  if (e.target.id === 'hlTag') { p.headline.tag = e.target.value; scheduleDraw(); return; }
+  if (e.target.id === 'hlColor' && tx) { tx.bg = e.target.value; tx.bgOn = true; showText(curText()); scheduleDraw(); return; }
+  if (e.target.id === 'hlText' && tx) { tx.text = e.target.value; scheduleDraw(); clearTimeout(S.hlT); S.hlT = setTimeout(renderTimeline, 300); return; }
+  if (e.target.id === 'hlTag' && tx) { tx.tag = e.target.value; scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { const f = S.sel && findClip(S.sel.id); if (!f || f.locked) return; f.c.zoom = parseFloat(e.target.value); $('#oZoom').textContent = Math.round(f.c.zoom * 100) + '%'; scheduleDraw(); }
 });
 $('#inspector').addEventListener('change', e => {
   if (['hlColor', 'hlX', 'hlY'].includes(e.target.id)) { renderInspector(); return; }
-  const p = proj();
-  if (e.target.id === 'hlFont') { p.headline.font = e.target.value; document.fonts.load(`700 40px "${p.headline.font}"`, 'ހ').then(scheduleDraw, scheduleDraw); renderInspector(); scheduleDraw(); return; }
+  const p = proj(), tx = curText();
+  if ((e.target.id === 'hlStart' || e.target.id === 'hlEnd') && tx && !tx.locked) {
+    const T = vTotal(p), r = textRange(p, tx) || [0, T], v = parseFloat(e.target.value);
+    let st = r[0], en = r[1];
+    if (!isNaN(v)) { if (e.target.id === 'hlStart') st = clamp(v, 0, en - .3); else en = clamp(v, st + .3, T); }
+    tx.start = Math.round(st * 10) / 10; tx.end = Math.round(en * 10) / 10;
+    renderTimeline(); renderInspector(); showText(tx); scheduleDraw(); return;
+  }
+  if (e.target.id === 'hlFont' && tx) { tx.font = e.target.value; document.fonts.load(`700 40px "${tx.font}"`, 'ހ').then(scheduleDraw, scheduleDraw); renderInspector(); scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { renderInspector(); return; }
   const f = S.sel && findClip(S.sel.id); if (!f || f.locked) return; const c = f.c, m = media.get(c.mid);
   if (e.target.id === 'inDur') { const v = parseFloat(e.target.value); const max = m && (m.kind === 'video' || m.kind === 'audio') ? m.dur - c.in : 120; c.dur = clamp(isNaN(v) ? c.dur : v, .5, Math.max(.5, max)); }
@@ -1510,17 +1594,19 @@ function clipAction(a) {
   seek(Math.min(playT, vTotal())); renderTimeline(); renderInspector();
 }
 $('#inspector').addEventListener('click', e => {
-  const hl = proj().headline;
-  const hb = e.target.closest('[data-hlbg],[data-hlc],[data-hlreset]');
+  const hl = curText();
+  const xd = e.target.closest('[data-xdel]'); if (xd) { deleteText(xd.dataset.xdel); return; }
+  const hb = e.target.closest('[data-hlbg],[data-hlc],[data-hlreset],[data-hltime]');
   if (hb && hl && !hl.locked) {
     if (hb.dataset.hlbg != null) hl.bgOn = hb.dataset.hlbg === '1';
     else if (hb.dataset.hlc != null) { hl.bg = hb.dataset.hlc || null; hl.bgOn = true; }
+    else if (hb.hasAttribute('data-hltime')) { hl.start = null; hl.end = null; renderTimeline(); }
     else { hl.x = null; hl.y = null; }
-    renderInspector(); showHeadline(); scheduleDraw(); return;
+    renderInspector(); showText(curText()); scheduleDraw(); return;
   }
   const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act);
 });
-$('#clipActs').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
+$('#clipActs').addEventListener('click', e => { const x = e.target.closest('[data-xdel]'); if (x) { deleteText(x.dataset.xdel); return; } const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
 $('#tlRestore').addEventListener('click', e => {
   const b = e.target.closest('[data-restore]'); if (!b || exporting) return; const p = proj(), r = b.dataset.restore;
   if (p.vLocked) { toast('V1 is locked. Unlock it to add the ' + r + '.'); return; }
@@ -1532,6 +1618,7 @@ document.addEventListener('keydown', e => {
   if ((e.key !== 'Delete' && e.key !== 'Backspace') || !isVideo() || exporting) return;
   if (e.target.closest('input,textarea,select,[contenteditable]')) return;
   if (S.sel && S.sel.type === 'clip' && findClip(S.sel.id)) { e.preventDefault(); clipAction('rm'); }
+  else if (curText()) { e.preventDefault(); deleteText(S.sel.id); }
 });
 $('#collapseBtn').addEventListener('click', () => {
   const on = !document.body.classList.contains('collapsed'); document.body.classList.toggle('collapsed', on);
