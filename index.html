@@ -299,7 +299,12 @@ textarea#layerText:read-only{opacity:.6}
 .vl-nm{flex:1;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inspector .sub{font-weight:600;font-size:13px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line)}
 .inspector .lbl{font-size:12.5px;color:var(--muted)}
+.inspector .row:has(#hlColor){flex-wrap:wrap}
 .inspector .ctlrow{display:flex;align-items:center;gap:8px;flex:1;max-width:190px}
+.hex{width:84px;border:1px solid var(--line);border-radius:7px;padding:4px 8px;font-size:12.5px;background:var(--panel);text-transform:uppercase;font-variant-numeric:tabular-nums;flex:none}
+.hex.bad{border-color:var(--down);box-shadow:0 0 0 1px var(--down)}
+.lc-custom{display:flex;align-items:center;gap:6px}
+.lc-custom input[type=color]{width:32px;height:30px;border:1px solid var(--line);border-radius:7px;padding:2px;background:var(--panel)}
 .num{width:60px;border:1px solid var(--line);border-radius:7px;padding:4px 6px;font-size:12.5px;text-align:right;background:var(--panel);flex:none}
 .unit{font-size:12px;color:var(--muted);flex:none}
 .inspector .ctlrow:has(.num){max-width:none;min-width:0;justify-content:flex-end}
@@ -499,7 +504,7 @@ textarea#layerText:read-only{opacity:.6}
           <div class="f-row"><label for="fWidth">Box width</label><div class="ctl"><input type="range" id="fWidth" min="20" max="100" step="1"><output id="oWidth"></output></div></div>
           <div class="f-row"><span class="lbl">Weight</span><div class="ctl"><div class="seg" id="fWeight"><button data-v="400">Regular</button><button data-v="700">Bold</button></div></div></div>
           <div class="f-row"><label for="fLh">Line height</label><div class="ctl"><input type="range" id="fLh" min="1" max="2.6" step="0.05"><output id="oLh"></output></div></div>
-          <div class="f-row"><span class="lbl">Color</span><div class="ctl"><span id="swatches" class="rowbtns" role="group" aria-label="Colors suggested for this background"></span><input type="color" id="fColor" title="Custom color" aria-label="Custom color"></div></div>
+          <div class="f-row"><span class="lbl">Color</span><div class="ctl"><span id="swatches" class="rowbtns" role="group" aria-label="Colors suggested for this background"></span><input type="color" id="fColor" title="Custom color" aria-label="Custom color"><input type="text" class="hex" data-for="fColor" maxlength="9" spellcheck="false" autocomplete="off" aria-label="Hex code" placeholder="#RRGGBB"></div></div>
           <div class="f-row"><span class="lbl">Shadow</span><div class="ctl"><div class="seg" id="fShadow"><button data-v="0">Off</button><button data-v="1">On</button></div></div></div>
         </div>
       </div>
@@ -1320,7 +1325,7 @@ function headlineFormat(hl, dis) {
   return `<div class="sub">Format</div>
     <div class="row"><label for="hlSize">Size</label><span class="ctlrow"><input type="range" id="hlSize" min="20" max="160" step="1" value="${hl.size || 60}" aria-label="Size slider" ${dis}><input type="number" class="num" id="hlSizeN" min="20" max="160" step="1" value="${hl.size || 60}" aria-label="Size in points" ${dis}><span class="unit">pt</span></span></div>${plain('hlWrap', 'oHW', hl.wrap || 80, 30, 100, 'Wrap width', '%')}
     <div class="row"><span class="lbl">Background</span><div class="seg"><button data-hlbg="1" aria-pressed="${on}" ${dis}>On</button><button data-hlbg="0" aria-pressed="${!on}" ${dis}>Off</button></div></div>
-    <div class="row"><span class="lbl">Color</span><span class="rowbtns">${sw.map(([c, n]) => `<button class="sw" data-hlc="${n === 'Default' ? '' : c}" style="background:${c}" aria-pressed="${on && c.toLowerCase() === cur}" aria-label="${n}" title="${n}" ${dis || (on ? '' : 'disabled')}></button>`).join('')}<input type="color" id="hlColor" value="${hl.bg || def}" aria-label="Custom background color" title="Custom color" ${dis || (on ? '' : 'disabled')}></span></div>
+    <div class="row"><span class="lbl">Color</span><span class="rowbtns">${sw.map(([c, n]) => `<button class="sw" data-hlc="${n === 'Default' ? '' : c}" style="background:${c}" aria-pressed="${on && c.toLowerCase() === cur}" aria-label="${n}" title="${n}" ${dis || (on ? '' : 'disabled')}></button>`).join('')}<input type="color" id="hlColor" value="${hl.bg || def}" aria-label="Custom background color" title="Custom color" ${dis || (on ? '' : 'disabled')}><input type="text" class="hex" data-for="hlColor" maxlength="9" spellcheck="false" autocomplete="off" aria-label="Hex code" placeholder="#RRGGBB" value="${(hl.bg || def).toUpperCase()}" ${dis || (on ? '' : 'disabled')}></span></div>
     ${slider('hlX', 'wHX', 'oHX', xs, 'Position X')}${slider('hlY', 'wHY', 'oHY', ys, 'Position Y')}
     <div class="btns"><button class="btn small" data-hlreset ${dis} ${hl.x == null && hl.y == null ? 'disabled' : ''}>Reset position</button></div>`;
 }
@@ -1502,6 +1507,8 @@ function renderLogoPanel() {
   const names = ['Main', 'Accent', 'Alternate'];
   let h = pal.map((c, i) => `<button data-lc="${c}" ${lk ? 'disabled' : ''} aria-pressed="${cur && cur !== 'original' && c.toLowerCase() === cur.toLowerCase()}" title="${c}"><span class="dot" style="background:${c}"></span>${names[i]}</button>`).join('');
   if (Q.logoMid) h += `<button data-lc="original" ${lk ? 'disabled' : ''} aria-pressed="${cur === 'original'}"><span class="dot orig"></span>Original</button>`;
+  const cc = cur && cur !== 'original' ? cur : pal[0];
+  h += `<span class="lc-custom"><input type="color" id="lcColor" value="${cc}" ${lk ? 'disabled' : ''} aria-label="Custom logo color" title="Custom color"><input type="text" class="hex" data-for="lcColor" maxlength="9" spellcheck="false" autocomplete="off" aria-label="Hex code" placeholder="#RRGGBB" value="${cc.toUpperCase()}" ${lk ? 'disabled' : ''}></span>`;
   $('#logoSwatches').innerHTML = h;
   $('#logoHint').textContent = lk ? 'Logo is locked' : Q.logoPlace === 'off' ? 'Logo is hidden. Pick a place under Logo Place.' : 'Suggested for this background';
 }
@@ -1520,7 +1527,7 @@ function renderFormat() {
   $$('#fAlign button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === l.align)));
   $$('#fWeight button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === +l.weight)));
   $$('#fShadow button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === +l.shadow)));
-  $('#fColor').value = l.color;
+  $('#fColor').value = l.color; syncHexes();
   $('#swatches').innerHTML = bgPalette().map(c => `<button class="sw" data-sw="${c}" style="background:${c}" aria-pressed="${c.toLowerCase() === l.color.toLowerCase()}" aria-label="Color ${c}" title="Suggested: ${c}"></button>`).join('');
   markCenter(l);
   const note = $('#fontNote');
@@ -1953,6 +1960,13 @@ function applyBg(change) {
   const Q = q();
   if (!Q.logoLocked && Q.logoColor && Q.logoColor !== 'original') { const i = prev.slice(0, 3).findIndex(c => c.toLowerCase() === Q.logoColor.toLowerCase()); if (i > -1) Q.logoColor = next[i]; }
 }
+$('#logoSwatches').addEventListener('input', e => {
+  if (e.target.id !== 'lcColor') return; const Q = q(); if (Q.logoLocked) return;
+  Q.logoColor = e.target.value; if (Q.logoPlace === 'off') Q.logoPlace = 'right';
+  $$('#logoSwatches [data-lc]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lc.toLowerCase() === e.target.value.toLowerCase())));
+  scheduleDraw();
+});
+$('#logoSwatches').addEventListener('change', e => { if (e.target.id === 'lcColor') renderQuoteUI(); });
 $('#logoSwatches').addEventListener('click', e => {
   const b = e.target.closest('[data-lc]'); const Q = q(); if (!b || Q.logoLocked) return;
   Q.logoColor = b.dataset.lc; if (Q.logoPlace === 'off') Q.logoPlace = 'right'; renderQuoteUI(); scheduleDraw();
@@ -2098,6 +2112,33 @@ function endDrag() {
 }
 cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', () => { pdrag = null; cv.style.cursor = ''; });
+
+/* ---------------- hex codes beside every colour picker ---------------- */
+function parseHex(v) {
+  v = String(v).trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(v)) v = v.split('').map(c => c + c).join('');
+  if (/^[0-9a-f]{8}$/i.test(v)) v = v.slice(0, 6);
+  return /^[0-9a-f]{6}$/i.test(v) ? '#' + v.toUpperCase() : null;
+}
+function syncHexes() {
+  $$('input.hex[data-for]').forEach(h => { const c = document.getElementById(h.dataset.for); if (c && h !== document.activeElement) { h.value = c.value.toUpperCase(); h.classList.remove('bad'); } });
+}
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches && t.matches('input[type=color]')) { const h = document.querySelector(`input.hex[data-for="${t.id}"]`); if (h && h !== document.activeElement) { h.value = t.value.toUpperCase(); h.classList.remove('bad'); } return; }
+  if (!t.matches || !t.matches('input.hex')) return;
+  const c = document.getElementById(t.dataset.for), v = parseHex(t.value);
+  t.classList.toggle('bad', !v && t.value.trim() !== '');
+  if (c && v && c.value.toLowerCase() !== v.toLowerCase()) { c.value = v; c.dispatchEvent(new Event('input', { bubbles: true })); }
+});
+document.addEventListener('change', e => {
+  const t = e.target; if (!t.matches || !t.matches('input.hex')) return;
+  const c = document.getElementById(t.dataset.for), v = parseHex(t.value);
+  if (!c) return;
+  if (!v) { toast('Use a hex code like #0D3253 or 0D3253.'); t.value = c.value.toUpperCase(); t.classList.remove('bad'); return; }
+  t.value = v; c.dispatchEvent(new Event('change', { bubbles: true }));
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('input.hex')) e.target.blur(); });
 
 /* ---------------- toast + modal ---------------- */
 let toastT;
