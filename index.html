@@ -821,7 +821,16 @@ function resizeCanvas() {
   $('#dimsLbl').textContent = `${W}×${H}`;
 }
 function scheduleDraw() { if (drawQueued) return; drawQueued = true; requestAnimationFrame(() => { drawQueued = false; draw(); }); }
-function draw() { if (isVideo()) drawVideo(ctx, cv.width, cv.height, playT); else drawQuote(ctx, cv.width, cv.height, true); }
+function draw() {
+  if (!isVideo()) { drawQuote(ctx, cv.width, cv.height, true); return; }
+  drawVideo(ctx, cv.width, cv.height, playT);
+  if (S.guide && (S.guide.x || S.guide.y) && !exporting) {
+    const W = cv.width, H = cv.height, s = Math.min(W, H) / 1080; ctx.save(); ctx.strokeStyle = 'rgba(47,124,246,.9)'; ctx.lineWidth = 2 * s; ctx.setLineDash([12 * s, 8 * s]);
+    if (S.guide.x) { ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke(); }
+    if (S.guide.y) { ctx.beginPath(); ctx.moveTo(0, H / 2); ctx.lineTo(W, H / 2); ctx.stroke(); }
+    ctx.restore();
+  }
+}
 
 const vTotal = (p = proj()) => p.clips.reduce((a, c) => a + c.dur, 0);
 function clipAt(p, t) {
@@ -846,17 +855,22 @@ function drawVideo(c, W, H, t) {
     else if (m.kind === 'video' && m.el && m.el.readyState >= 2) drawCover(c, m.el, m.el.videoWidth, m.el.videoHeight, W, H, hit.c.zoom || 1, hit.c.ox, hit.c.oy);
   }
   const ur = userRange(p);
-  if (!hit.c.role) drawVideoLogo(c, W, H, p);
+  vLogoBox = null; if (!hit.c.role) drawVideoLogo(c, W, H, p);
   [...(p.texts || [])].sort((a, b) => a.track - b.track).forEach(tx => { if (!tx.text) return; const r = textRange(p, tx); if (r && t >= r[0] && t < r[1]) drawLowerThird(c, W, H, tx, t - r[0], r[1] - t); });
 }
+let vLogoBox = null;
 /* video logo: top-left corner, over your clips (the intro and outro carry their own branding) */
 function drawVideoLogo(c, W, H, p) {
   const m = p.logoMid && media.get(p.logoMid); if (!m || !m.el || p.logoOn === false) return;
   const s = Math.min(W, H) / 1080, pad = 48 * s, iw = m.el.naturalWidth, ih = m.el.naturalHeight; if (!iw || !ih) return;
   /* 100% = the image's own pixels, one to one; no shrinking to fit */
-  const k = (p.logoSize || 100) / 100, x = Math.round(pad), y = Math.round(pad);
+  const k = (p.logoSize || 100) / 100, w = Math.round(iw * k), h = Math.round(ih * k);
+  /* position: logoX/logoY are the logo's centre in % of the frame; null = top-left corner */
+  const x = Math.round(p.logoX == null ? pad : clamp(p.logoX / 100 * W - w / 2, 0, Math.max(0, W - w)));
+  const y = Math.round(p.logoY == null ? pad : clamp(p.logoY / 100 * H - h / 2, 0, Math.max(0, H - h)));
+  vLogoBox = { x, y, w, h, dx: (pad + w / 2) / W * 100, dy: (pad + h / 2) / H * 100 };
   c.save(); c.imageSmoothingQuality = 'high';
-  if (k === 1) c.drawImage(m.el, x, y); else c.drawImage(m.el, x, y, Math.round(iw * k), Math.round(ih * k));
+  if (k === 1) c.drawImage(m.el, x, y); else c.drawImage(m.el, x, y, w, h);
   c.restore();
 }
 /* when a text layer shows: its own start/end, or (null) the span of your clips */
@@ -1387,8 +1401,17 @@ function renderVLogo() {
   el.innerHTML = `<div class="vl-row"><span class="vl-th" style="background-image:url(${m.thumb})"></span><span class="vl-nm" title="${esc(m.name)}">${esc(m.name)}${lk ? ' · locked' : ''}</span><button class="ib" data-vlogo="lock" aria-pressed="${lk}" aria-label="${lk ? 'Unlock' : 'Lock'} logo" title="${lk ? 'Unlock' : 'Lock'} logo">${ICON(lk ? 'i-lock' : 'i-unlock')}</button><button class="ib del" data-vlogo="rm" ${d} aria-label="Delete logo" title="${lk ? 'Unlock to delete' : 'Delete logo'}">${ICON('i-trash')}</button></div>
     <div class="row"><span class="lbl">Show</span><div class="seg"><button data-vlogo="on" aria-pressed="${on}" ${d}>On</button><button data-vlogo="off" aria-pressed="${!on}" ${d}>Off</button></div></div>
     <div class="row"><label for="vLogoSize">Size</label><span class="ctlrow"><input type="range" id="vLogoSize" min="40" max="250" step="5" value="${size}" ${on && !lk ? '' : 'disabled'}><output id="oVLS">${size}%</output></span></div>
-    <span class="muted">${m.el.naturalWidth}×${m.el.naturalHeight} px. At 100% it is placed at exactly this size.</span>
+    ${['X', 'Y'].map(a => { const v = logoPos(p, a); return `<div class="row"><label for="vLogo${a}">Position ${a}</label><span class="ctlrow"><span class="rangewrap ${v === 50 ? 'on' : ''}" id="wVL${a}" title="Snaps to center"><input type="range" id="vLogo${a}" min="0" max="100" step="0.5" value="${v}" ${on && !lk ? '' : 'disabled'}></span><output id="oVL${a}">${posFmt(v)}</output></span></div>`; }).join('')}
+    <span class="muted">${m.el.naturalWidth}×${m.el.naturalHeight} px. At 100% it is placed at exactly this size. Drag it in the preview to move it.</span>
+    <button class="btn small" data-vlogo="reset" ${d} ${p.logoX == null && p.logoY == null ? 'disabled' : ''}>Reset position</button>
     <button class="btn small" data-vlogo="up" ${d}>Replace logo</button>`;
+}
+/* current logo centre in %, for sliders: stored value, or where the top-left default puts it */
+function logoPos(p, a) {
+  const v = a === 'X' ? p.logoX : p.logoY; if (v != null) return v;
+  const m = p.logoMid && media.get(p.logoMid); if (!m || !m.el) return 0;
+  const W = cv.width, H = cv.height, s = Math.min(W, H) / 1080, k = (p.logoSize || 100) / 100;
+  return Math.round((a === 'X' ? (48 * s + m.el.naturalWidth * k / 2) / W : (48 * s + m.el.naturalHeight * k / 2) / H) * 200) / 2;
 }
 function showLogoFrame() {
   const ur = userRange(proj()); if (!ur || playing) return;
@@ -1401,9 +1424,16 @@ $('#vLogo').addEventListener('click', e => {
   if (a === 'up') { $('#vLogoIn').click(); return; }
   if (a === 'rm') { p.logoMid = null; toast('Logo removed from this video.'); }
   if (a === 'on' || a === 'off') { p.logoOn = a === 'on'; showLogoFrame(); }
+  if (a === 'reset') { p.logoX = null; p.logoY = null; showLogoFrame(); }
   renderVLogo(); scheduleDraw();
 });
+$('#vLogo').addEventListener('change', e => { if (/^vLogo[XY]$/.test(e.target.id)) renderVLogo(); });
 $('#vLogo').addEventListener('input', e => {
+  if (e.target.id === 'vLogoX' || e.target.id === 'vLogoY') {
+    const p = proj(); if (p.logoLocked) return; const a = e.target.id.slice(-1), v = snapC(parseFloat(e.target.value));
+    e.target.value = v; p['logo' + a] = v; if (p['logo' + (a === 'X' ? 'Y' : 'X')] == null) p['logo' + (a === 'X' ? 'Y' : 'X')] = logoPos(p, a === 'X' ? 'Y' : 'X');
+    $('#oVL' + a).textContent = posFmt(v); $('#wVL' + a).classList.toggle('on', v === 50); showLogoFrame(); scheduleDraw(); return;
+  }
   if (e.target.id !== 'vLogoSize') return; const p = proj(); if (p.logoLocked) return; p.logoSize = parseInt(e.target.value, 10);
   $('#oVLS').textContent = p.logoSize + '%'; showLogoFrame(); scheduleDraw();
 });
@@ -2012,7 +2042,13 @@ function hitLayer(pt) {
 cv.addEventListener('pointerdown', e => {
   if (exporting) return;
   const pt = toCanvasPt(e);
-  if (isVideo()) { pdrag = { kind: 'video', pt, pan: videoPanTarget(), moved: false }; }
+  if (isVideo()) {
+    const p = proj(), b = vLogoBox;
+    if (b && pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) {
+      if (p.logoLocked) { toast('The logo is locked. Unlock it to move it.'); pdrag = { kind: 'video', pt, moved: false }; }
+      else pdrag = { kind: 'vlogo', pt, moved: false, sx: logoPos(p, 'X'), sy: logoPos(p, 'Y') };
+    } else pdrag = { kind: 'video', pt, pan: videoPanTarget(), moved: false };
+  }
   else {
     const lb = q()._logoBox;
     if (lb && pt.x >= lb.x && pt.x <= lb.x + lb.w && pt.y >= lb.y && pt.y <= lb.y + lb.h) { q().sel = 'logo'; renderQuoteUI(); scheduleDraw(); return; }
@@ -2025,12 +2061,20 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   const pt = toCanvasPt(e);
+  const overLogo = isVideo() && vLogoBox && pt.x >= vLogoBox.x && pt.x <= vLogoBox.x + vLogoBox.w && pt.y >= vLogoBox.y && pt.y <= vLogoBox.y + vLogoBox.h;
+  if (!pdrag && overLogo) { cv.style.cursor = proj().logoLocked ? 'not-allowed' : 'grab'; return; }
   if (!pdrag) { cv.style.cursor = isVideo() ? (videoPanTarget() ? 'move' : 'pointer') : (hitLayer(pt) ? (hitLayer(pt).locked ? 'not-allowed' : 'grab') : bgPanTarget() ? 'move' : 'default'); return; }
   const dx = pt.x - pdrag.pt.x, dy = pt.y - pdrag.pt.y;
   if (Math.abs(dx) + Math.abs(dy) > 6 * cv.width / 1080) pdrag.moved = true;
   if (!pdrag.moved) return;
   cv.style.cursor = 'grabbing';
-  if (pdrag.kind === 'text') {
+  if (pdrag.kind === 'vlogo') {
+    const p = proj();
+    p.logoX = snapC(Math.round(clamp(pdrag.sx + dx / cv.width * 100, 0, 100) * 2) / 2);
+    p.logoY = snapC(Math.round(clamp(pdrag.sy + dy / cv.height * 100, 0, 100) * 2) / 2);
+    S.guide = { x: p.logoX === 50, y: p.logoY === 50 };
+    ['X', 'Y'].forEach(a => { const i = $('#vLogo' + a); if (i) { i.value = p['logo' + a]; $('#oVL' + a).textContent = posFmt(p['logo' + a]); $('#wVL' + a).classList.toggle('on', p['logo' + a] === 50); } });
+  } else if (pdrag.kind === 'text') {
     const l = pdrag.l;
     l.x = snapC(Math.round(clamp(pdrag.sx + dx / cv.width * 100, 0, 100) * 2) / 2);
     l.y = snapC(Math.round(clamp(pdrag.sy + dy / cv.height * 100, 0, 100) * 2) / 2);
@@ -2046,6 +2090,7 @@ cv.addEventListener('pointermove', e => {
 function endDrag() {
   if (!pdrag) return; const d = pdrag; pdrag = null; cv.style.cursor = '';
   if (S.guide) { S.guide = null; scheduleDraw(); }
+  if (d.kind === 'vlogo') { if (!d.moved) { playing ? pause() : play(); return; } renderVLogo(); return; }
   if (d.kind === 'video') {
     if (!d.moved) { playing ? pause() : play(); return; }
     if (d.pan) { S.sel = { type: 'clip', id: d.pan.obj.id }; renderTimeline(); renderInspector(); }
