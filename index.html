@@ -283,6 +283,16 @@ textarea#layerText:read-only{opacity:.6}
 .inspector input[type=range]{flex:1;accent-color:var(--ink)}
 .inspector .btns{display:flex;gap:6px;flex-wrap:wrap}
 .inspector .muted{font-size:12.5px;color:var(--muted)}
+.vlogo{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-inner);padding:12px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.vlogo .muted{font-size:12px;color:var(--muted)}
+.vlogo .row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
+.vlogo .lbl,.vlogo label{font-size:12.5px;color:var(--muted)}
+.vlogo .ctlrow{display:flex;align-items:center;gap:8px;flex:1;max-width:180px}
+.vlogo input[type=range]{flex:1;min-width:0;accent-color:var(--ink)}
+.vlogo output{font-size:12.5px;font-weight:500;min-width:40px;text-align:right}
+.vl-row{display:flex;align-items:center;gap:10px;width:100%}
+.vl-th{width:44px;height:30px;border-radius:6px;flex:none;background:var(--sunk-2) center/contain no-repeat;border:1px solid var(--line)}
+.vl-nm{flex:1;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .inspector .sub{font-weight:600;font-size:13px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line)}
 .inspector .lbl{font-size:12.5px;color:var(--muted)}
 .inspector .ctlrow{display:flex;align-items:center;gap:8px;flex:1;max-width:190px}
@@ -511,6 +521,11 @@ textarea#layerText:read-only{opacity:.6}
     </div>
 
     <div id="videoRight">
+      <div class="group">
+        <div class="g-title">Logo <small>top left, over your clips</small></div>
+        <div class="vlogo" id="vLogo"></div>
+        <input type="file" id="vLogoIn" accept="image/*" hidden>
+      </div>
       <div class="group">
         <div class="g-title">Selected</div>
         <div class="inspector" id="inspector"></div>
@@ -755,12 +770,12 @@ const clip = (mid, dur, role) => ({ id: uid(), mid, dur, in: 0, ...(role ? { rol
 function freshProjects() {
   return {
     sports: {
-      ratio: '16:9', orient: 'landscape',
+      ratio: '16:9', orient: 'portrait',
       clips: [clip('g-sports-intro', 3, 'intro'), clip('g-sample-pitch', 4), clip('g-sample-sea', 3), clip('g-sports-outro', 2.6, 'outro')],
       audio: [[]], headline: { on: true, text: 'ޤައުމީ ޓީމުގެ ތަމްރީނު ފަށައިފި', tag: 'ކުޅިވަރު' }
     },
     moosun: {
-      ratio: '4:5', orient: 'portrait',
+      ratio: '16:9', orient: 'portrait',
       clips: [clip('g-moosun-intro', 3, 'intro'), clip('g-sample-sea', 5), clip('g-moosun-outro', 2.6, 'outro')],
       audio: [[]], headline: { on: true, text: 'މިއަދު ވިއްސާރަ ވެހުމުގެ ފުރުޞަތު އޮތް', tag: 'މޫސުން' }
     },
@@ -827,7 +842,16 @@ function drawVideo(c, W, H, t) {
     else if (m.kind === 'video' && m.el && m.el.readyState >= 2) drawCover(c, m.el, m.el.videoWidth, m.el.videoHeight, W, H, hit.c.zoom || 1, hit.c.ox, hit.c.oy);
   }
   const ur = userRange(p);
+  if (!hit.c.role) drawVideoLogo(c, W, H, p);
   [...(p.texts || [])].sort((a, b) => a.track - b.track).forEach(tx => { if (!tx.text) return; const r = textRange(p, tx); if (r && t >= r[0] && t < r[1]) drawLowerThird(c, W, H, tx, t - r[0], r[1] - t); });
+}
+/* video logo: top-left corner, over your clips (the intro and outro carry their own branding) */
+function drawVideoLogo(c, W, H, p) {
+  const m = p.logoMid && media.get(p.logoMid); if (!m || !m.el || p.logoOn === false) return;
+  const s = Math.min(W, H) / 1080, pad = 48 * s, iw = m.el.naturalWidth, ih = m.el.naturalHeight; if (!iw || !ih) return;
+  let h = 90 * s * (p.logoSize || 100) / 100, w = h * iw / ih;
+  if (w > W * .45) { w = W * .45; h = w * ih / iw; }
+  c.drawImage(m.el, pad, pad, w, h);
 }
 /* when a text layer shows: its own start/end, or (null) the span of your clips */
 function textRange(p, tx) {
@@ -1105,6 +1129,7 @@ function renderFmtCard() {
 function renderRatio() {
   const p = proj();
   $$('#ratioSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === p.ratio)));
+  $$('#ratioSeg button').forEach(b => { const [x, y] = b.dataset.r.split(':'); const rot = b.dataset.r !== '1:1' && (p.orient === 'portrait') !== (+x < +y); b.textContent = rot && b.dataset.r === p.ratio ? `${y}:${x}` : b.dataset.r; });
   $$('#orientSeg button').forEach(b => { b.setAttribute('aria-pressed', String(p.ratio !== '1:1' && b.dataset.o === p.orient)); b.disabled = p.ratio === '1:1'; });
   resizeCanvas();
   const name = { sports: 'Sports News', moosun: 'Moosun', quote: 'Religious Quote' }[S.mode];
@@ -1348,6 +1373,38 @@ function deleteText(id) {
   toast('Text deleted. The track stays: click it to add text again.');
   renderTimeline(); renderInspector(); scheduleDraw();
 }
+function renderVLogo() {
+  const p = proj(), el = $('#vLogo'); if (!el || !isVideo()) return;
+  const m = p.logoMid && media.get(p.logoMid);
+  if (!m) { el.innerHTML = '<button class="btn" data-vlogo="up">Upload logo</button><span class="muted">PNG or SVG with a transparent background works best.</span>'; return; }
+  const on = p.logoOn !== false, size = p.logoSize || 100;
+  el.innerHTML = `<div class="vl-row"><span class="vl-th" style="background-image:url(${m.thumb})"></span><span class="vl-nm" title="${esc(m.name)}">${esc(m.name)}</span><button class="ib del" data-vlogo="rm" aria-label="Delete logo" title="Delete logo">${ICON('i-trash')}</button></div>
+    <div class="row"><span class="lbl">Show</span><div class="seg"><button data-vlogo="on" aria-pressed="${on}">On</button><button data-vlogo="off" aria-pressed="${!on}">Off</button></div></div>
+    <div class="row"><label for="vLogoSize">Size</label><span class="ctlrow"><input type="range" id="vLogoSize" min="40" max="250" step="5" value="${size}" ${on ? '' : 'disabled'}><output id="oVLS">${size}%</output></span></div>
+    <button class="btn small" data-vlogo="up">Replace logo</button>`;
+}
+function showLogoFrame() {
+  const ur = userRange(proj()); if (!ur || playing) return;
+  if (playT < ur[0] || playT >= ur[1]) seek(Math.min(ur[0] + 1, (ur[0] + ur[1]) / 2));
+}
+$('#vLogo').addEventListener('click', e => {
+  const b = e.target.closest('[data-vlogo]'); if (!b || exporting) return; const p = proj(), a = b.dataset.vlogo;
+  if (a === 'up') { $('#vLogoIn').click(); return; }
+  if (a === 'rm') { p.logoMid = null; toast('Logo removed from this video.'); }
+  if (a === 'on' || a === 'off') { p.logoOn = a === 'on'; showLogoFrame(); }
+  renderVLogo(); scheduleDraw();
+});
+$('#vLogo').addEventListener('input', e => {
+  if (e.target.id !== 'vLogoSize') return; const p = proj(); p.logoSize = parseInt(e.target.value, 10);
+  $('#oVLS').textContent = p.logoSize + '%'; showLogoFrame(); scheduleDraw();
+});
+$('#vLogoIn').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const m = await addFileMedia(f); if (!m) return;
+  if (m.kind !== 'image') { media.delete(m.id); toast('Choose an image file for the logo, such as a PNG or SVG.'); return; }
+  m.quoteOnly = true; const p = proj(); p.logoMid = m.id; p.logoOn = true;
+  renderVLogo(); showLogoFrame(); scheduleDraw(); toast('Logo added to the top left of your clips.');
+});
 function renderClipActs() {
   const el = $('#clipActs'); if (!el) return;
   const tx = curText();
@@ -1437,7 +1494,7 @@ function renderFormat() {
 /* ---------------- full render ---------------- */
 function renderAll() {
   renderModes(); renderRatio();
-  if (isVideo()) { renderLib(); renderTimeline(); renderInspector(); }
+  if (isVideo()) { renderLib(); renderTimeline(); renderInspector(); renderVLogo(); }
   else renderQuoteUI();
   scheduleDraw();
 }
@@ -1450,7 +1507,7 @@ $('#modes').addEventListener('click', e => {
 });
 $('#ratioSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || exporting) return; const p = proj();
-  p.ratio = b.dataset.r; if (p.ratio === '16:9') p.orient = 'landscape'; if (p.ratio === '4:5') p.orient = 'portrait';
+  p.ratio = b.dataset.r; if (p.ratio === '16:9') p.orient = isVideo() ? 'portrait' : 'landscape'; if (p.ratio === '4:5') p.orient = 'portrait';
   renderRatio(); if (isVideo()) { renderTimeline(); renderInspector(); } scheduleDraw();
 });
 $('#orientSeg').addEventListener('click', e => {
@@ -2183,7 +2240,7 @@ async function restore() {
   for (const f of d.fonts || []) { try { await loadFontBlob(f.name, f.blob); } catch (e) {} }
   P = normalize(d.P); S.fmt = d.fmt || S.fmt; S.mode = d.mode || 'sports';
   ['sports', 'moosun'].forEach(k => { const p = P[k]; p.clips.forEach(c => { if (!media.has(c.mid)) c.mid = c.role === 'outro' ? `g-${k}-outro` : c.role === 'intro' ? `g-${k}-intro` : c.mid; }); p.clips = p.clips.filter(c => media.has(c.mid)); p.audio = p.audio.map(t => t.filter(c => media.has(c.mid))); });
-  { const Q = P.quote; Q.bgUploads = Q.bgUploads.filter(id => media.has(id)); if (Q.bgMid && !media.has(Q.bgMid)) Q.bgMid = null; if (Q.logoMid && !media.has(Q.logoMid)) Q.logoMid = null; }
+  { const Q = P.quote; Q.bgUploads = Q.bgUploads.filter(id => media.has(id)); if (Q.bgMid && !media.has(Q.bgMid)) Q.bgMid = null; if (Q.logoMid && !media.has(Q.logoMid)) Q.logoMid = null; ['sports', 'moosun'].forEach(k => { if (P[k].logoMid && !media.has(P[k].logoMid)) P[k].logoMid = null; }); }
   $('#status').textContent = `Restored project from ${new Date(d.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
   return true;
 }
