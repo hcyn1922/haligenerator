@@ -179,6 +179,17 @@ body.collapsed .side-foot{justify-content:center;padding:12px 0}
 .trim::after{content:"";width:3px;height:16px;border-radius:2px;background:rgba(255,255,255,.85)}
 .trim:hover{background:rgba(255,255,255,.22)}
 .clip.text.trimming{box-shadow:0 0 0 2px var(--fg)}
+.clip.text,.clip.audio{cursor:grab;touch-action:none}
+.clip.moving{pointer-events:none;opacity:.88;z-index:6;box-shadow:0 8px 20px rgba(0,0,0,.28);cursor:grabbing;transition:none}
+body.tmove,body.amove{cursor:grabbing;user-select:none}
+.ruler-drop{display:none}
+body.tmove .ruler{background:var(--blue-soft);border-radius:6px}
+body.tmove .ruler-drop{display:flex;position:absolute;right:8px;top:0;bottom:0;align-items:center;font-size:11px;font-weight:600;color:var(--fg);z-index:1;pointer-events:none}
+body.tmove .ruler.drop{outline:2px dashed var(--blue);outline-offset:1px}
+.g-drop{display:none}
+body.amove [data-newaudio]{border-color:var(--blue);color:var(--fg)}
+body.amove [data-newaudio] .g-idle{display:none}
+body.amove [data-newaudio] .g-drop{display:inline}
 .tplus{position:absolute;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;border:2px solid var(--sunk);background:var(--ink);color:var(--ink-fg);font-weight:600;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;z-index:3}
 .tplus:hover{transform:scale(1.12)}
 .lane-add{position:absolute;inset:0;border:0;background:transparent;text-align:left;padding:0 12px;font-size:12px;color:var(--muted);border-radius:8px}
@@ -770,7 +781,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map((tx, i) => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, track: i, size: 60, wrap: 80, ...tx, id: tx.id || uid() })); if (p.tCount == null) { p.tCount = p.texts.length; p.tLocks = p.texts.map(t => !!t.locked); } p.tCount = Math.max(p.tCount, ...p.texts.map(t => t.track + 1)); p.tLocks = Array.from({ length: p.tCount }, (_, i) => !!(p.tLocks || [])[i]); p.texts.forEach(t => { t.locked = p.tLocks[t.track]; }); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map((tx, i) => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, track: i, size: 60, wrap: 80, ...tx, id: tx.id || uid() })); if (p.tCount == null) { p.tCount = p.texts.length; p.tLocks = p.texts.map(t => !!t.locked); } p.tCount = Math.max(p.tCount, ...p.texts.map(t => t.track + 1)); p.tLocks = Array.from({ length: p.tCount }, (_, i) => !!(p.tLocks || [])[i]); p.texts.forEach(t => { t.locked = p.tLocks[t.track]; }); p.audio.forEach(tr => { let acc = 0; tr.forEach(c => { if (c.at == null) c.at = acc; acc = c.at + c.dur; }); tr.sort((a, b) => a.at - b.at); }); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -1037,10 +1048,8 @@ function syncMedia(t, play) {
   const hit = clipAt(p, t);
   if (hit && t < vTotal(p)) { const m = media.get(hit.c.mid); if (m && m.kind === 'video') { active.add(m.el); syncEl(m.el, hit.c.in + hit.local, play); } }
   p.audio.forEach(track => {
-    let acc = 0;
     for (const c of track) {
-      if (t >= acc && t < acc + c.dur) { const m = media.get(c.mid); if (m && m.el && !active.has(m.el)) { active.add(m.el); syncEl(m.el, c.in + (t - acc), play); } }
-      acc += c.dur;
+      if (t >= c.at && t < c.at + c.dur) { const m = media.get(c.mid); if (m && m.el && !active.has(m.el)) { active.add(m.el); syncEl(m.el, c.in + (t - c.at), play); } }
     }
   });
   media.forEach(m => { if (m.el && (m.kind === 'video' || m.kind === 'audio') && !active.has(m.el) && !m.el.paused) m.el.pause(); });
@@ -1131,7 +1140,8 @@ function renderTimeline() {
   const p = proj(), T = vTotal(p), tl = $('#tl');
   const avail = Math.max(240, (tl.clientWidth || 600) - 112);
   const pps = S.pps = clamp((avail - 30) / Math.max(T, 1), 22, 140);
-  const inner = Math.max(avail, T * pps + 30);
+  const aEnd = Math.max(0, ...p.audio.flat().map(c => c.at + c.dur));
+  const inner = Math.max(avail, Math.max(T, aEnd) * pps + 30);
   const ur = userRange(p);
   let L = '<div class="tl-labels"><div class="ruler-l"></div>';
   L += p.tCount
@@ -1141,7 +1151,7 @@ function renderTimeline() {
   p.audio.forEach((_, i) => { const lk = !!p.aLocks[i]; L += `<div class="tl-lab ${lk ? 'locked' : ''}" title="Audio track"><span class="nm">A${i + 1}</span>${lockBtn(`data-tlock="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}${delBtn(`data-tdel="a" data-track="${i}"`, lk, `audio track A${i + 1}`)}</div>`; });
   L += '<button class="tl-add" data-act="add-audio" aria-label="Add audio track" title="Add audio track">+</button></div>';
 
-  let R = `<div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner" style="width:${inner}px"><div class="ruler" id="ruler">`;
+  let R = `<div class="tl-scroll" id="tlScroll"><div class="tl-inner" id="tlInner" style="width:${inner}px"><div class="ruler" id="ruler"><span class="ruler-drop">Drop here for a new text track</span>`;
   const step = pps > 60 ? 1 : pps > 30 ? 2 : 5;
   for (let s = 0; s <= Math.ceil(inner / pps); s++) {
     const maj = s % step === 0; R += `<i class="${maj ? 'maj' : ''}" style="left:${s * pps}px"></i>`;
@@ -1181,16 +1191,14 @@ function renderTimeline() {
 
   p.audio.forEach((track, ti) => {
     R += `<div class="lane ${p.aLocks[ti] ? 'locked' : ''}" data-lane="a" data-track="${ti}">`;
-    let a = 0;
     track.forEach(c => {
       const m = media.get(c.mid);
-      R += `<div role="button" tabindex="0" class="clip audio ${S.sel?.id === c.id ? 'sel' : ''}" data-aid="${c.id}" data-track="${ti}" style="left:${a * pps}px;width:${Math.max(8, c.dur * pps - 2)}px"><span class="nm">♪ ${esc(m ? m.name : 'Missing file')}</span>${S.sel?.id === c.id && !p.aLocks[ti] ? `<button class="cdel" data-cdel="${c.id}" aria-label="Delete clip" title="Delete clip (Delete key)">${ICON('i-trash')}</button>` : ''}</div>`;
-      a += c.dur;
+      R += `<div role="button" tabindex="0" class="clip audio ${S.sel?.id === c.id ? 'sel' : ''}" data-aid="${c.id}" data-track="${ti}" title="${esc(m ? m.name : 'Audio')} · ${fmtT(c.at)} to ${fmtT(c.at + c.dur)}" style="left:${c.at * pps}px;width:${Math.max(8, c.dur * pps - 2)}px"><span class="nm">♪ ${esc(m ? m.name : 'Missing file')}</span>${S.sel?.id === c.id && !p.aLocks[ti] ? `<button class="cdel" data-cdel="${c.id}" aria-label="Delete clip" title="Delete clip (Delete key)">${ICON('i-trash')}</button>` : ''}</div>`;
     });
     if (!track.length) R += '<span class="hint">Drop music or a voiceover here</span>';
     R += '</div>';
   });
-  R += '<div class="lane ghost" data-act="add-audio">Add an audio track</div>';
+  R += '<div class="lane ghost" data-act="add-audio" data-newaudio="1"><span class="g-idle">Add an audio track</span><span class="g-drop">Drop here for a new audio track</span></div>';
   R += `<div class="playhead" id="playhead" style="left:${playT * pps}px"></div></div></div>`;
   tl.innerHTML = L + R;
   $('#clipCount').textContent = `${p.clips.filter(c => !c.role).length} clips`;
@@ -1241,7 +1249,8 @@ function renderInspector() {
   const maxDur = m && (m.kind === 'video' || m.kind === 'audio') ? Math.max(.5, m.dur - c.in) : 60;
   let h = `<div class="row"><b>${c.role ? (c.role === 'intro' ? 'Intro' : 'Outro') : esc(m ? m.name : 'Missing file')}</b>${f.locked ? `<span class="pill-note">${ICON('i-lock')} Track locked</span>` : `<span class="muted">${m ? (m.kind === 'gen' ? 'built-in' : m.kind) : ''}</span>`}</div>`;
   h += `<div class="row"><label for="inDur">Duration (s)</label><input type="number" id="inDur" ${dis} min="0.5" max="${maxDur.toFixed(2)}" step="0.1" value="${c.dur.toFixed(1)}"></div>`;
-  if (m && (m.kind === 'video' || m.kind === 'audio')) h += `<div class="row"><label for="inIn">Start at (s)</label><input type="number" id="inIn" ${dis} min="0" max="${Math.max(0, m.dur - .5).toFixed(2)}" step="0.1" value="${c.in.toFixed(1)}"></div>`;
+  if (f.kind === 'a') h += `<div class="row"><label for="inAt">Plays from (s)</label><input type="number" id="inAt" ${dis} min="0" step="0.1" value="${c.at.toFixed(1)}"></div>`;
+  if (m && (m.kind === 'video' || m.kind === 'audio')) h += `<div class="row"><label for="inIn">${f.kind === 'a' ? 'Skip first (s)' : 'Start at (s)'}</label><input type="number" id="inIn" ${dis} min="0" max="${Math.max(0, m.dur - .5).toFixed(2)}" step="0.1" value="${c.in.toFixed(1)}"></div>`;
   if (f.kind === 'v' && m && (m.kind === 'video' || m.kind === 'image')) {
     const ov = overflowOf(m, c.zoom);
     h += `<label class="slrow" for="inZoom">Zoom <input type="range" id="inZoom" ${dis} min="1" max="3" step="0.01" value="${c.zoom || 1}"><output id="oZoom">${Math.round((c.zoom || 1) * 100)}%</output></label>`;
@@ -1274,6 +1283,17 @@ function showText(tx) {
   const r = tx && textRange(proj(), tx); if (!r || playing) return;
   if (playT < r[0] + .6 || playT > r[1] - .3) seek(Math.min(r[0] + .8, (r[0] + r[1]) / 2));
 }
+/* nearest free spot of length dur to the desired start, among the given busy ranges */
+function fitSlot(busy, desired, dur, maxEnd) {
+  const gaps = []; let cur = 0;
+  busy.slice().sort((a, b) => a[0] - b[0]).forEach(r => { if (r[0] - cur >= dur - 1e-6) gaps.push([cur, r[0]]); cur = Math.max(cur, r[1]); });
+  if (maxEnd - cur >= dur - 1e-6) gaps.push([cur, maxEnd]);
+  let best = null;
+  gaps.forEach(g => { const st = clamp(desired, g[0], g[1] - dur); const d = Math.abs(st - desired); if (!best || d < best.d) best = { st, d }; });
+  return best ? Math.round(best.st * 100) / 100 : null;
+}
+const AUDIO_MAX = 3600;
+const busyAudio = (track, skip) => track.filter(c => c !== skip).map(c => [c.at, c.at + c.dur]);
 /* free space on a text clip's track: the clips either side bound it */
 function trackBounds(p, tx) {
   const r = textRange(p, tx) || [0, 0], T = vTotal(p); let lo = 0, hi = T;
@@ -1480,7 +1500,7 @@ function addToTimeline(m, atIndex) {
   if (m.kind === 'audio') {
     if (!p.audio.length) { p.audio.push([]); p.aLocks.push(false); }
     const ti = p.aLocks.findIndex(x => !x); if (ti < 0) { toast('All audio tracks are locked.'); return null; }
-    p.audio[ti].push(c);
+    c.at = fitSlot(busyAudio(p.audio[ti]), Math.max(0, ...p.audio[ti].map(o => o.at + o.dur)), c.dur, AUDIO_MAX); p.audio[ti].push(c); p.audio[ti].sort((a, b) => a.at - b.at);
   } else {
     if (p.vLocked) { toast('V1 is locked. Unlock it to add clips.'); return null; }
     let outro = p.clips.findIndex(x => x.role === 'outro'); if (outro < 0) outro = p.clips.length;
@@ -1541,6 +1561,77 @@ $('#tl').addEventListener('click', e => {
   const hc = e.target.closest('[data-hl]'); if (hc) { S.sel = { type: 'text', id: hc.dataset.hl }; seek(timeFromX(e.clientX)); renderTimeline(); renderInspector(); return; }
   if (e.target.closest('#ruler') || e.target.closest('.lane')) seek(timeFromX(e.clientX));
 });
+/* move text and audio clips: drag along the track, onto another track, or to a new track */
+let mv = null;
+function moveTarget(e) {
+  const hit = document.elementFromPoint(e.clientX, e.clientY);
+  if (!hit) return null;
+  if (mv.isText) {
+    const lane = hit.closest('.lane[data-lane="text"]'); if (lane) return { kind: 'track', i: +lane.dataset.ti, el: lane };
+    if (hit.closest('#ruler')) return { kind: 'new', el: $('#ruler') };
+  } else {
+    const lane = hit.closest('.lane[data-lane="a"]'); if (lane) return { kind: 'track', i: +lane.dataset.track, el: lane };
+    const g = hit.closest('[data-newaudio]'); if (g) return { kind: 'new', el: g };
+  }
+  return null;
+}
+function moveLocked(p, tg, isText) { return tg && tg.kind === 'track' && (isText ? !!p.tLocks[tg.i] : !!p.aLocks[tg.i]); }
+$('#tl').addEventListener('pointerdown', e => {
+  if (exporting || e.button !== 0 || e.target.closest('[data-trim],button')) return;
+  const el = e.target.closest('.clip.text,.clip.audio'); if (!el) return;
+  const p = proj(), isText = el.classList.contains('text');
+  let obj, r, track;
+  if (isText) { obj = p.texts.find(x => x.id === el.dataset.hl); if (!obj || obj.locked) return; r = textRange(p, obj); if (!r) return; track = obj.track; }
+  else { const f = findClip(el.dataset.aid); if (!f || f.locked) return; obj = f.c; r = [obj.at, obj.at + obj.dur]; track = f.ti; }
+  mv = { el, isText, obj, track, s: r[0], dur: r[1] - r[0], x0: e.clientX, y0: e.clientY, moved: false, pid: e.pointerId, tg: null };
+});
+$('#tl').addEventListener('pointermove', e => {
+  if (!mv) return;
+  const dx = e.clientX - mv.x0, dy = e.clientY - mv.y0;
+  if (!mv.moved) {
+    if (Math.abs(dx) + Math.abs(dy) < 5) return;
+    mv.moved = true; if (playing) pause();
+    try { mv.el.setPointerCapture(mv.pid); } catch (err) {}
+    mv.el.classList.add('moving'); document.body.classList.add(mv.isText ? 'tmove' : 'amove');
+  }
+  mv.el.style.left = Math.max(0, mv.s + dx / S.pps) * S.pps + 'px'; mv.el.style.transform = `translateY(${dy}px)`;
+  const tg = moveTarget(e), p = proj();
+  $$('#tl .drop').forEach(x => x.classList.remove('drop'));
+  if (tg && !moveLocked(p, tg, mv.isText)) tg.el.classList.add('drop');
+  mv.tg = tg;
+});
+function endMove(e, cancel) {
+  const d = mv; if (!d) return; mv = null;
+  document.body.classList.remove('tmove', 'amove'); $$('#tl .drop').forEach(x => x.classList.remove('drop'));
+  if (!d.moved) return;
+  S.trimClick = true; setTimeout(() => { S.trimClick = false; }, 0);
+  const p = proj(), T = vTotal(p);
+  if (cancel) { renderTimeline(); return; }
+  const dx = e.clientX - d.x0, desired = Math.max(0, Math.round((d.s + dx / S.pps) * 10) / 10);
+  const tg = d.tg || { kind: 'track', i: d.track };
+  if (moveLocked(p, tg, d.isText)) { toast('That track is locked.'); renderTimeline(); return; }
+  if (d.isText) {
+    const tx = d.obj; let ti = tg.i;
+    if (tg.kind === 'new') { p.texts.forEach(t => { t.track++; }); p.tLocks.unshift(false); p.tCount++; ti = 0; }
+    const st = fitSlot(p.texts.filter(o => o !== tx && o.track === ti).map(o => textRange(p, o)).filter(Boolean), desired, d.dur, T);
+    if (st == null) { toast(`There is no room for this text on T${ti + 1}.`); if (tg.kind === 'new') { p.texts.forEach(t => { t.track--; }); p.tLocks.shift(); p.tCount--; } renderTimeline(); return; }
+    tx.track = ti; tx.locked = false; tx.start = st; tx.end = Math.round((st + d.dur) * 100) / 100;
+    S.sel = { type: 'text', id: tx.id };
+    toast(`Text moved to T${ti + 1} at ${fmtT(st)}.`);
+  } else {
+    const c = d.obj; let ti = tg.i;
+    if (tg.kind === 'new') { p.audio.push([]); p.aLocks.push(false); ti = p.audio.length - 1; }
+    p.audio[d.track] = p.audio[d.track].filter(o => o !== c);
+    const tr = p.audio[ti], st = fitSlot(busyAudio(tr), desired, c.dur, AUDIO_MAX);
+    c.at = st; tr.push(c); tr.sort((a, b) => a.at - b.at);
+    S.sel = { type: 'clip', id: c.id };
+    toast(`Audio moved to A${ti + 1} at ${fmtT(st)}.`);
+    syncMedia(playT, false);
+  }
+  renderTimeline(); renderInspector(); scheduleDraw();
+}
+$('#tl').addEventListener('pointerup', e => endMove(e, false));
+$('#tl').addEventListener('pointercancel', e => endMove(e, true));
 /* trim a text clip by dragging either end */
 let trimD = null;
 $('#tl').addEventListener('pointerdown', e => {
@@ -1593,7 +1684,7 @@ $('#tl').addEventListener('drop', e => {
   p.clips.forEach((c, i) => { if (idx === null && acc + c.dur / 2 > t && c.role !== 'intro') idx = i; acc += c.dur; });
   if (dragData.type === 'media') {
     const m = media.get(dragData.id); if (!m) return;
-    if (lane.dataset.lane === 'a') { if (m.kind === 'audio' || m.kind === 'video') { const c = clip(m.id, +defaultDur(m).toFixed(2)); p.audio[+lane.dataset.track].push(c); S.sel = { type: 'clip', id: c.id }; } else toast('Only audio or video files can go on an audio track.'); }
+    if (lane.dataset.lane === 'a') { if (m.kind === 'audio' || m.kind === 'video') { const c = clip(m.id, +defaultDur(m).toFixed(2)), tr = p.audio[+lane.dataset.track]; c.at = fitSlot(busyAudio(tr), Math.round(t * 10) / 10, c.dur, AUDIO_MAX); tr.push(c); tr.sort((a, b) => a.at - b.at); S.sel = { type: 'clip', id: c.id }; } else toast('Only audio or video files can go on an audio track.'); }
     else if (m.kind === 'audio') toast('Audio files go on an audio track.');
     else addToTimeline(m, idx);
   } else if (dragData.type === 'clip' && lane.dataset.lane === 'v') {
@@ -1639,7 +1730,8 @@ $('#inspector').addEventListener('change', e => {
   if (e.target.id === 'hlFont' && tx) { tx.font = e.target.value; document.fonts.load(`700 40px "${tx.font}"`, 'ހ').then(scheduleDraw, scheduleDraw); renderInspector(); scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { renderInspector(); return; }
   const f = S.sel && findClip(S.sel.id); if (!f || f.locked) return; const c = f.c, m = media.get(c.mid);
-  if (e.target.id === 'inDur') { const v = parseFloat(e.target.value); const max = m && (m.kind === 'video' || m.kind === 'audio') ? m.dur - c.in : 120; c.dur = clamp(isNaN(v) ? c.dur : v, .5, Math.max(.5, max)); }
+  if (e.target.id === 'inDur') { const v = parseFloat(e.target.value); let max = m && (m.kind === 'video' || m.kind === 'audio') ? m.dur - c.in : 120; if (f.kind === 'a') max = Math.min(max, ...f.list.filter(o => o !== c && o.at >= c.at + .01).map(o => o.at - c.at)); c.dur = clamp(isNaN(v) ? c.dur : v, .5, Math.max(.5, max)); }
+  if (e.target.id === 'inAt' && f.kind === 'a') { const v = parseFloat(e.target.value); if (!isNaN(v)) { const st = fitSlot(busyAudio(f.list, c), Math.max(0, v), c.dur, AUDIO_MAX); if (st != null) c.at = st; f.list.sort((x, y) => x.at - y.at); } }
   if (e.target.id === 'inIn' && m) { const v = parseFloat(e.target.value); c.in = clamp(isNaN(v) ? 0 : v, 0, Math.max(0, m.dur - .5)); c.dur = Math.min(c.dur, m.dur - c.in); }
   if (e.target.id === 'inRep') { const nm = media.get(e.target.value); c.mid = nm.id; c.in = 0; c.ox = c.oy = 0; c.zoom = 1; c.dur = +defaultDur(nm).toFixed(2); if (actx) ensureAudio(); }
   seek(Math.min(playT, vTotal())); renderTimeline(); renderInspector();
@@ -1654,7 +1746,7 @@ function clipAction(a) {
     toast(f.c.role ? `${f.c.role === 'intro' ? 'Intro' : 'Outro'} deleted. Use + ${f.c.role === 'intro' ? 'Intro' : 'Outro'} above the timeline to add it back.` : `Deleted ${m ? m.name : 'clip'} from the timeline.`);
     syncMedia(Math.min(playT, vTotal()), playing);
   }
-  if (a === 'dup') { const c2 = { ...f.c, id: uid() }; f.list.splice(f.i + 1, 0, c2); S.sel = { type: 'clip', id: c2.id }; }
+  if (a === 'dup') { const c2 = { ...f.c, id: uid() }; if (f.kind === 'a') { c2.at = fitSlot(busyAudio(f.list), f.c.at + f.c.dur, c2.dur, AUDIO_MAX); f.list.push(c2); f.list.sort((x, y) => x.at - y.at); } else f.list.splice(f.i + 1, 0, c2); S.sel = { type: 'clip', id: c2.id }; }
   if (a === 'mv-l' || a === 'mv-r') { const j = f.i + (a === 'mv-l' ? -1 : 1), o = f.list[j]; if (o && !o.role) { f.list[f.i] = o; f.list[j] = f.c; } }
   seek(Math.min(playT, vTotal())); renderTimeline(); renderInspector();
 }
