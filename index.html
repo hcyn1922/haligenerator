@@ -765,7 +765,7 @@ const WEB_FONTS = ['Noto Sans Thaana', 'Amiri', 'Noto Naskh Arabic', 'Inter'];
 const FONTS = [...MV_FONTS, ...WEB_FONTS];
 const fontOk = {};
 function normalize(P) {
-  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map((tx, i) => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, track: i, ...tx, id: tx.id || uid() })); if (p.tCount == null) { p.tCount = p.texts.length; p.tLocks = p.texts.map(t => !!t.locked); } p.tCount = Math.max(p.tCount, ...p.texts.map(t => t.track + 1)); p.tLocks = Array.from({ length: p.tCount }, (_, i) => !!(p.tLocks || [])[i]); p.texts.forEach(t => { t.locked = p.tLocks[t.track]; }); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
+  ['sports', 'moosun'].forEach(k => { const p = P[k]; if (!p.texts) p.texts = p.headline && p.headline.on !== false ? [p.headline] : []; delete p.headline; p.texts = p.texts.map((tx, i) => ({ text: '', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, start: null, end: null, track: i, size: 60, wrap: 80, ...tx, id: tx.id || uid() })); if (p.tCount == null) { p.tCount = p.texts.length; p.tLocks = p.texts.map(t => !!t.locked); } p.tCount = Math.max(p.tCount, ...p.texts.map(t => t.track + 1)); p.tLocks = Array.from({ length: p.tCount }, (_, i) => !!(p.tLocks || [])[i]); p.texts.forEach(t => { t.locked = p.tLocks[t.track]; }); p.vLocked = !!p.vLocked; p.aLocks = p.audio.map((_, i) => !!(p.aLocks || [])[i]); p.clips.forEach(c => { c.zoom = c.zoom || 1; c.ox = c.ox || 0; c.oy = c.oy || 0; }); });
   const Q = P.quote; Q.bgZoom = Q.bgZoom || 1; Q.bgOx = Q.bgOx || 0; Q.bgOy = Q.bgOy || 0; Q.bgLocked = !!Q.bgLocked; Q.logoLocked = !!Q.logoLocked; Q.bgUploads = Q.bgUploads || (Q.bgMid ? [Q.bgMid] : []);
   Q.layers.forEach(l => { l.locked = !!l.locked; });
   if (Q.logoColor === undefined) Q.logoColor = null;
@@ -825,23 +825,25 @@ const HL_DEFAULT = () => S.mode === 'sports' ? '#DE5638' : '#1C7FC0';
 const mctx = document.createElement('canvas').getContext('2d');
 function lum(hex) { const n = parseInt(String(hex).replace('#', ''), 16); const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(n >> 16 & 255) + .7152 * f(n >> 8 & 255) + .0722 * f(n & 255); }
 function hlLayout(c, W, H, hl) {
-  const s = Math.min(W, H) / 1080, pad = 48 * s, fs = 44 * s, HF = `"${hl.font || OVERLAY_FONT}", ${TH}`;
+  const s = Math.min(W, H) / 1080, pad = 48 * s, fs = (hl.size || 60) * s, HF = `"${hl.font || OVERLAY_FONT}", ${TH}`;
+  const padX = fs * .6, lineH = fs * 1.7, tfs = Math.max(18 * s, fs * .45);
   c.save(); c.font = `700 ${fs}px ${HF}`;
   const rtl = RTL_RE.test(hl.text); c.direction = rtl ? 'rtl' : 'ltr';
-  const maxW = W - pad * 2, lines = wrap(c, hl.text || ' ', maxW - 56 * s).slice(0, 3);
-  const lineH = fs * 1.75, boxH = lines.length * lineH + 26 * s;
-  const boxW = Math.min(maxW, Math.max(...lines.map(l => c.measureText(l).width)) + 56 * s);
-  c.font = `700 ${26 * s}px ${TH}`;
-  const tw = hl.tag ? c.measureText(hl.tag).width + 30 * s : 0, th = hl.tag ? 46 * s : 0;
+  const maxW = Math.min(W - pad * 2, W * (hl.wrap || 80) / 100);
+  const lines = wrap(c, hl.text || ' ', Math.max(fs * 2, maxW - padX * 2));
+  const boxH = lines.length * lineH + fs * .3;
+  const boxW = Math.min(W - pad * 2, Math.max(...lines.map(l => c.measureText(l).width)) + padX * 2);
+  c.font = `700 ${tfs}px ${TH}`;
+  const tw = hl.tag ? c.measureText(hl.tag).width + tfs * 1.2 : 0, th = hl.tag ? tfs * 1.75 : 0;
   c.restore();
   const dx = rtl ? W - pad - boxW / 2 : pad + boxW / 2, dy = H - pad - (H > W ? H * .07 : 0) - boxH / 2;
   const def = { x: Math.round(dx / W * 200) / 2, y: Math.round(dy / H * 200) / 2 };
   const cx = clamp(hl.x == null ? dx : hl.x / 100 * W, boxW / 2, W - boxW / 2);
-  const cy = clamp(hl.y == null ? dy : hl.y / 100 * H, boxH / 2 + th, H - boxH / 2);
-  return { s, fs, HF, rtl, lines, lineH, boxH, boxW, tw, th, cx, cy, def };
+  const cy = boxH + th > H ? boxH / 2 + th : clamp(hl.y == null ? dy : hl.y / 100 * H, boxH / 2 + th, H - boxH / 2);
+  return { s, fs, HF, rtl, lines, lineH, boxH, boxW, tw, th, tfs, padX, cx, cy, def };
 }
 function drawLowerThird(c, W, H, hl, lt, remain) {
-  const L = hlLayout(c, W, H, hl), { s, rtl, lines, lineH, boxH, boxW, tw, th, cx, cy } = L;
+  const L = hlLayout(c, W, H, hl), { s, rtl, lines, lineH, boxH, boxW, tw, th, tfs, padX, cx, cy } = L;
   const def = HL_DEFAULT(), bg = hl.bg || def, on = hl.bgOn !== false, light = on && lum(bg) > .45;
   const a = Math.min(ease(lt / .5), ease(remain / .35));
   const left = cx - boxW / 2, right = cx + boxW / 2, top = cy - boxH / 2;
@@ -850,14 +852,14 @@ function drawLowerThird(c, W, H, hl, lt, remain) {
   if (hl.tag) {
     const tx = rtl ? right - tw : left;
     c.globalAlpha = a; c.fillStyle = !on ? def : light ? '#111837' : '#FFFFFF'; c.fillRect(tx, top - th, tw, th);
-    c.font = `700 ${26 * s}px ${TH}`; c.direction = 'rtl'; c.textAlign = 'center';
+    c.font = `700 ${tfs}px ${TH}`; c.direction = 'rtl'; c.textAlign = 'center';
     c.fillStyle = !on || light ? '#FFFFFF' : bg; c.fillText(hl.tag, tx + tw / 2, top - th / 2 + 2 * s);
   }
   c.globalAlpha = ease((lt - .25) / .4) * a;
   c.font = `700 ${L.fs}px ${L.HF}`; c.direction = rtl ? 'rtl' : 'ltr'; c.textAlign = rtl ? 'right' : 'left';
   c.fillStyle = light ? '#111837' : '#FFFFFF';
   if (!on) { c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 14 * s; c.shadowOffsetY = 3 * s; }
-  lines.forEach((ln, i) => c.fillText(ln, rtl ? right - 28 * s : left + 28 * s, top + 13 * s + lineH * (i + .5)));
+  lines.forEach((ln, i) => c.fillText(ln, rtl ? right - padX : left + padX, top + L.fs * .15 + lineH * (i + .5)));
   c.restore();
 }
 
@@ -1255,7 +1257,9 @@ function headlineFormat(hl, dis) {
   const xs = hl.x ?? L.def.x, ys = hl.y ?? L.def.y;
   const sw = [[def, 'Default'], ['#0D3253', 'Navy'], ['#111111', 'Black'], ['#FFFFFF', 'White']];
   const slider = (id, w, o, v, lbl) => `<div class="row"><label for="${id}">${lbl}</label><span class="ctlrow"><span class="rangewrap ${+v === 50 ? 'on' : ''}" id="${w}" title="Snaps to center"><input type="range" id="${id}" min="0" max="100" step="0.5" value="${v}" ${dis}></span><output id="${o}">${posFmt(v)}</output></span></div>`;
+  const plain = (id, o, v, min, max, lbl, unit) => `<div class="row"><label for="${id}">${lbl}</label><span class="ctlrow"><input type="range" id="${id}" min="${min}" max="${max}" step="1" value="${v}" ${dis}><output id="${o}">${v}${unit}</output></span></div>`;
   return `<div class="sub">Format</div>
+    ${plain('hlSize', 'oHS', hl.size || 60, 20, 160, 'Size', ' pt')}${plain('hlWrap', 'oHW', hl.wrap || 80, 30, 100, 'Wrap width', '%')}
     <div class="row"><span class="lbl">Background</span><div class="seg"><button data-hlbg="1" aria-pressed="${on}" ${dis}>On</button><button data-hlbg="0" aria-pressed="${!on}" ${dis}>Off</button></div></div>
     <div class="row"><span class="lbl">Color</span><span class="rowbtns">${sw.map(([c, n]) => `<button class="sw" data-hlc="${n === 'Default' ? '' : c}" style="background:${c}" aria-pressed="${on && c.toLowerCase() === cur}" aria-label="${n}" title="${n}" ${dis || (on ? '' : 'disabled')}></button>`).join('')}<input type="color" id="hlColor" value="${hl.bg || def}" aria-label="Custom background color" title="Custom color" ${dis || (on ? '' : 'disabled')}></span></div>
     ${slider('hlX', 'wHX', 'oHX', xs, 'Position X')}${slider('hlY', 'wHY', 'oHY', ys, 'Position Y')}
@@ -1282,7 +1286,7 @@ function addTextClip(track, st, base) {
   const en = Math.min(next, st + 3);
   if (en - st < .3) { toast('There is no room for more text there. Trim the text next to it first.'); return; }
   const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: base ? base.tag : '', font: base ? base.font : OVERLAY_FONT, locked: false, bgOn: base ? base.bgOn : true, bg: base ? base.bg : null,
-    x: base ? base.x : 50, y: base ? base.y : clamp(18 + track * 14, 10, 80), track, start: st, end: Math.round(en * 10) / 10 };
+    x: base ? base.x : 50, y: base ? base.y : clamp(18 + track * 14, 10, 80), size: base ? base.size : 60, wrap: base ? base.wrap : 80, track, start: st, end: Math.round(en * 10) / 10 };
   p.texts.push(tx);
   S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
   toast(`Text added on T${track + 1} at ${fmtT(st)}. Drag its ends to change how long it shows.`);
@@ -1292,7 +1296,7 @@ function addText(after) {
   const p = proj();
   if (!p.tCount) {
     p.tCount = 1; p.tLocks = [false];
-    const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, track: 0, start: null, end: null };
+    const tx = { id: uid(), text: 'ނަމޫނާ ޓެކްސްޓް', tag: '', font: OVERLAY_FONT, locked: false, bgOn: true, bg: null, x: null, y: null, track: 0, start: null, end: null, size: 60, wrap: 80 };
     p.texts.push(tx); S.sel = { type: 'text', id: tx.id }; renderTimeline(); renderInspector(); showText(tx); scheduleDraw();
     toast('Text track added over your clips.'); return;
   }
@@ -1604,6 +1608,10 @@ $('#inspector').addEventListener('input', e => {
     const v = snapC(parseFloat(e.target.value)), k = e.target.id === 'hlX' ? 'x' : 'y'; e.target.value = v; tx[k] = v;
     $(k === 'x' ? '#oHX' : '#oHY').textContent = posFmt(v); $(k === 'x' ? '#wHX' : '#wHY').classList.toggle('on', v === 50);
     showText(curText()); scheduleDraw(); return;
+  }
+  if ((e.target.id === 'hlSize' || e.target.id === 'hlWrap') && tx) {
+    const v = parseInt(e.target.value, 10), big = e.target.id === 'hlSize'; tx[big ? 'size' : 'wrap'] = v;
+    $(big ? '#oHS' : '#oHW').textContent = v + (big ? ' pt' : '%'); showText(tx); scheduleDraw(); return;
   }
   if (e.target.id === 'hlColor' && tx) { tx.bg = e.target.value; tx.bgOn = true; showText(curText()); scheduleDraw(); return; }
   if (e.target.id === 'hlText' && tx) { tx.text = e.target.value; scheduleDraw(); clearTimeout(S.hlT); S.hlT = setTimeout(renderTimeline, 300); return; }
