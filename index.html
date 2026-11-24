@@ -439,7 +439,6 @@ textarea#layerText:read-only{opacity:.6}
     </div>
     <div class="exportbox">
       <div class="pc-head"><span class="pc-ic"><svg class="i"><use href="#i-dl"/></svg></span><span><small>Export as</small><b id="fmtName">MP4 video</b></span></div>
-      <p class="pc-text" id="fmtText">Download the finished post to share on social media.</p>
       <div class="radios" id="fmtRadios" role="radiogroup" aria-label="Export format"></div>
       <button class="btn block" id="exportBtn" title="Export"><svg class="i"><use href="#i-dl"/></svg><span class="lbl">Export</span></button>
     </div>
@@ -1149,7 +1148,6 @@ function renderModes() {
 function renderFmtCard() {
   const f = isVideo() ? S.fmt.video : S.fmt.image;
   $('#fmtName').textContent = { mp4: 'MP4 video', gif: 'GIF animation', jpeg: 'JPEG image', png: 'PNG image' }[f];
-  $('#fmtText').textContent = { mp4: 'Video with sound, ready for Instagram, Facebook and TikTok.', gif: 'Silent looping animation, 480px.', jpeg: 'Smaller file, best for photos.', png: 'Sharpest text, larger file.' }[f];
 }
 function renderRatio() {
   const p = proj();
