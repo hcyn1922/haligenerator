@@ -275,6 +275,11 @@ textarea#layerText:read-only{opacity:.6}
 .inspector .sub{font-weight:600;font-size:13px;padding-top:10px;margin-top:2px;border-top:1px solid var(--line)}
 .inspector .lbl{font-size:12.5px;color:var(--muted)}
 .inspector .ctlrow{display:flex;align-items:center;gap:8px;flex:1;max-width:190px}
+.num{width:60px;border:1px solid var(--line);border-radius:7px;padding:4px 6px;font-size:12.5px;text-align:right;background:var(--panel);flex:none}
+.unit{font-size:12px;color:var(--muted);flex:none}
+.inspector .ctlrow:has(.num){max-width:none;min-width:0;justify-content:flex-end}
+.inspector .ctlrow input[type=range]{min-width:0;width:auto;flex:1}
+.inspector .num{width:54px}
 .inspector output{font-size:12.5px;font-weight:500;min-width:44px;text-align:right}
 .inspector input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:7px;padding:2px;background:var(--panel)}
 .pill-note{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
@@ -463,7 +468,7 @@ textarea#layerText:read-only{opacity:.6}
           <div class="f-row"><label for="fFont">Font</label><div class="ctl"><select id="fFont"></select><button class="linkbtn" id="fontUpBtn">Add font</button><input type="file" id="fontIn" accept=".ttf,.otf,.woff,.woff2" hidden></div></div>
           <div class="f-row"><span class="lbl">Position X</span><div class="ctl"><span class="rangewrap" id="wX" title="Snaps to center"><input type="range" id="fX" min="0" max="100" step="0.5" aria-label="Position X"></span><output id="oX"></output></div></div>
           <div class="fontnote" id="fontNote" hidden></div>
-          <div class="f-row"><label for="fSize">Size</label><div class="ctl"><input type="range" id="fSize" min="16" max="180" step="1"><output id="oSize"></output></div></div>
+          <div class="f-row"><label for="fSize">Size</label><div class="ctl"><input type="range" id="fSize" min="16" max="180" step="1" aria-label="Size slider"><output id="oSize" hidden></output><input type="number" class="num" id="fSizeN" min="16" max="180" step="1" aria-label="Size in points"><span class="unit">pt</span></div></div>
           <div class="f-row"><span class="lbl">Position Y</span><div class="ctl"><span class="rangewrap" id="wY" title="Snaps to center"><input type="range" id="fY" min="0" max="100" step="0.5" aria-label="Position Y"></span><output id="oY"></output></div></div>
           <div class="f-row"><span class="lbl">Text Align</span><div class="ctl"><div class="seg" id="fAlign"><button data-v="right">Right</button><button data-v="center">Center</button><button data-v="left">Left</button></div></div></div>
           <div class="f-row"><label for="fWidth">Box width</label><div class="ctl"><input type="range" id="fWidth" min="20" max="100" step="1"><output id="oWidth"></output></div></div>
@@ -1259,7 +1264,7 @@ function headlineFormat(hl, dis) {
   const slider = (id, w, o, v, lbl) => `<div class="row"><label for="${id}">${lbl}</label><span class="ctlrow"><span class="rangewrap ${+v === 50 ? 'on' : ''}" id="${w}" title="Snaps to center"><input type="range" id="${id}" min="0" max="100" step="0.5" value="${v}" ${dis}></span><output id="${o}">${posFmt(v)}</output></span></div>`;
   const plain = (id, o, v, min, max, lbl, unit) => `<div class="row"><label for="${id}">${lbl}</label><span class="ctlrow"><input type="range" id="${id}" min="${min}" max="${max}" step="1" value="${v}" ${dis}><output id="${o}">${v}${unit}</output></span></div>`;
   return `<div class="sub">Format</div>
-    ${plain('hlSize', 'oHS', hl.size || 60, 20, 160, 'Size', ' pt')}${plain('hlWrap', 'oHW', hl.wrap || 80, 30, 100, 'Wrap width', '%')}
+    <div class="row"><label for="hlSize">Size</label><span class="ctlrow"><input type="range" id="hlSize" min="20" max="160" step="1" value="${hl.size || 60}" aria-label="Size slider" ${dis}><input type="number" class="num" id="hlSizeN" min="20" max="160" step="1" value="${hl.size || 60}" aria-label="Size in points" ${dis}><span class="unit">pt</span></span></div>${plain('hlWrap', 'oHW', hl.wrap || 80, 30, 100, 'Wrap width', '%')}
     <div class="row"><span class="lbl">Background</span><div class="seg"><button data-hlbg="1" aria-pressed="${on}" ${dis}>On</button><button data-hlbg="0" aria-pressed="${!on}" ${dis}>Off</button></div></div>
     <div class="row"><span class="lbl">Color</span><span class="rowbtns">${sw.map(([c, n]) => `<button class="sw" data-hlc="${n === 'Default' ? '' : c}" style="background:${c}" aria-pressed="${on && c.toLowerCase() === cur}" aria-label="${n}" title="${n}" ${dis || (on ? '' : 'disabled')}></button>`).join('')}<input type="color" id="hlColor" value="${hl.bg || def}" aria-label="Custom background color" title="Custom color" ${dis || (on ? '' : 'disabled')}></span></div>
     ${slider('hlX', 'wHX', 'oHX', xs, 'Position X')}${slider('hlY', 'wHY', 'oHY', ys, 'Position Y')}
@@ -1393,6 +1398,7 @@ function renderFormat() {
   $('#layerText').readOnly = !!l.locked;
   if (document.activeElement !== $('#layerText')) $('#layerText').value = l.text;
   $('#fFont').innerHTML = fontOptions(l.font);
+  $('#fSizeN').value = l.size;
   [['fSize', 'oSize', l.size, v => v + 'px'], ['fX', 'oX', l.x, posFmt], ['fY', 'oY', l.y, posFmt], ['fWidth', 'oWidth', l.width, v => v + '%'], ['fLh', 'oLh', l.lh, v => (+v).toFixed(2)]]
     .forEach(([i, o, v, f]) => { $('#' + i).value = v; $('#' + o).textContent = f(v); });
   $$('#fAlign button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === l.align)));
@@ -1611,14 +1617,16 @@ $('#inspector').addEventListener('input', e => {
   }
   if ((e.target.id === 'hlSize' || e.target.id === 'hlWrap') && tx) {
     const v = parseInt(e.target.value, 10), big = e.target.id === 'hlSize'; tx[big ? 'size' : 'wrap'] = v;
-    $(big ? '#oHS' : '#oHW').textContent = v + (big ? ' pt' : '%'); showText(tx); scheduleDraw(); return;
+    if (big) $('#hlSizeN').value = v; else $('#oHW').textContent = v + '%'; showText(tx); scheduleDraw(); return;
   }
+  if (e.target.id === 'hlSizeN' && tx) { sizeFromBox(e.target, 20, 160, v => { if (v == null) return; tx.size = v; $('#hlSize').value = v; showText(tx); scheduleDraw(); }, false); return; }
   if (e.target.id === 'hlColor' && tx) { tx.bg = e.target.value; tx.bgOn = true; showText(curText()); scheduleDraw(); return; }
   if (e.target.id === 'hlText' && tx) { tx.text = e.target.value; scheduleDraw(); clearTimeout(S.hlT); S.hlT = setTimeout(renderTimeline, 300); return; }
   if (e.target.id === 'hlTag' && tx) { tx.tag = e.target.value; scheduleDraw(); return; }
   if (e.target.id === 'inZoom') { const f = S.sel && findClip(S.sel.id); if (!f || f.locked) return; f.c.zoom = parseFloat(e.target.value); $('#oZoom').textContent = Math.round(f.c.zoom * 100) + '%'; scheduleDraw(); }
 });
 $('#inspector').addEventListener('change', e => {
+  if (e.target.id === 'hlSizeN') { const tx = curText(); if (tx && !tx.locked) sizeFromBox(e.target, 20, 160, v => { if (v != null) tx.size = v; scheduleDraw(); }, true); renderInspector(); return; }
   if (['hlColor', 'hlX', 'hlY'].includes(e.target.id)) { renderInspector(); return; }
   const p = proj(), tx = curText();
   if ((e.target.id === 'hlStart' || e.target.id === 'hlEnd') && tx && !tx.locked) {
@@ -1726,7 +1734,15 @@ function bindRange(id, out, key, fmt, snap) {
     l[key] = v; $('#' + out).textContent = fmt(v); scheduleDraw();
   });
 }
-bindRange('fSize', 'oSize', 'size', v => v + 'px'); bindRange('fX', 'oX', 'x', posFmt, true); bindRange('fY', 'oY', 'y', posFmt, true);
+bindRange('fSize', 'oSize', 'size', v => v + 'px');
+$('#fSize').addEventListener('input', e => { $('#fSizeN').value = e.target.value; });
+function sizeFromBox(inp, min, max, apply, final) {
+  const v = parseInt(inp.value, 10);
+  if (isNaN(v)) { if (final) apply(null); return; }
+  if (final || (v >= min && v <= max)) apply(clamp(v, min, max));
+}
+$('#fSizeN').addEventListener('input', e => sizeFromBox(e.target, 16, 180, v => { const l = editable(); if (!l || v == null) return; l.size = v; $('#fSize').value = v; scheduleDraw(); }, false));
+$('#fSizeN').addEventListener('change', e => sizeFromBox(e.target, 16, 180, v => { const l = editable(); if (!l) return; if (v != null) l.size = v; e.target.value = l.size; $('#fSize').value = l.size; scheduleDraw(); }, true)); bindRange('fX', 'oX', 'x', posFmt, true); bindRange('fY', 'oY', 'y', posFmt, true);
 bindRange('fWidth', 'oWidth', 'width', v => v + '%'); bindRange('fLh', 'oLh', 'lh', v => v.toFixed(2));
 $('#fFont').addEventListener('change', e => { const l = editable(); if (!l) return; l.font = e.target.value; document.fonts.load(`${l.weight} 40px "${l.font}"`, l.text).then(scheduleDraw, scheduleDraw); renderFormat(); scheduleDraw(); });
 [['fAlign', 'align', v => v], ['fWeight', 'weight', v => +v], ['fShadow', 'shadow', v => +v]].forEach(([id, key, conv]) => {
