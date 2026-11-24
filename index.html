@@ -68,6 +68,20 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 .side-label{font-size:12.5px;color:var(--muted);padding:4px 8px 6px}
 .side .grow{flex:1}
 .side-sec.files{flex:1;min-height:200px;gap:8px;padding-bottom:12px}
+/* Generators and Uploaded files sit in their own cards */
+.side-card{margin:10px 8px 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--shadow);padding:8px 6px}
+.side-card + .side-card{border-top:1px solid var(--line)}
+.side-card.files{margin-bottom:10px;padding-bottom:10px}
+.side-card .files-head{flex-direction:column;align-items:flex-start;gap:0;padding-right:0}
+.side-card .files-head .tag{padding:0 8px 2px}
+.side-head + .side-card{margin-top:12px}
+.side-card .mode[aria-pressed="true"]{background:var(--sunk);box-shadow:none}
+.side-card .nav:hover{background:var(--sunk)}
+.side-card #uploadBtn{box-shadow:none;background:var(--sunk)}
+.side-card #uploadBtn:hover{background:var(--sunk-2)}
+.side-card .lib li:hover{background:var(--sunk)}
+body.collapsed .side-card{margin:8px 6px 0;padding:4px}
+body.collapsed .side-card.files{margin-bottom:8px}
 .files-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding-right:8px}
 .files-head .side-label{padding-bottom:0}
 .files-head .tag{font-size:11.5px;color:var(--muted)}
@@ -411,7 +425,7 @@ textarea#layerText:read-only{opacity:.6}
         <svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>
       </button>
     </div>
-    <div class="side-sec gens">
+    <div class="side-sec side-card gens">
       <div class="side-label">Generators</div>
       <nav id="modes">
         <button class="nav mode" id="m-sports" data-mode="sports" title="Sports News">
@@ -429,7 +443,7 @@ textarea#layerText:read-only{opacity:.6}
       </nav>
     </div>
     <div class="grow" id="sideGrow"></div>
-    <div class="side-sec files" id="sideFiles">
+    <div class="side-sec side-card files" id="sideFiles">
       <div class="files-head"><span class="side-label">Uploaded files</span><span class="tag">click or drag to add</span></div>
       <button class="btn block" id="uploadBtn" title="Upload video, image or audio files">
         <svg class="i" viewBox="0 0 24 24"><path d="M12 19V8M7 12l5-5 5 5M5 4h14"/></svg><span class="lbl">Upload files</span>
