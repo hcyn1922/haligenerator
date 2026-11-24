@@ -247,6 +247,7 @@ body.amove [data-newaudio] .g-drop{display:inline}
 .cdel:hover{background:#DC3E3E}
 .cdel svg{width:13px;height:13px}
 .vplus{position:absolute;top:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;border:2px solid var(--panel);background:var(--ink);color:var(--ink-fg);font-weight:700;display:flex;align-items:center;justify-content:center;padding:0;z-index:3;font-size:15px;line-height:1}
+.snapline{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--blue);pointer-events:none;z-index:5;margin-left:-1px}
 .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--pink);pointer-events:none;z-index:4}
 .playhead::before{content:"";position:absolute;top:-2px;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--pink)}
 
@@ -1261,7 +1262,7 @@ function renderTimeline() {
     R += '</div>';
   });
   R += '<div class="lane ghost" data-act="add-audio" data-newaudio="1"><span class="g-idle">Add an audio track</span><span class="g-drop">Drop here for a new audio track</span></div>';
-  R += `<div class="playhead" id="playhead" style="left:${playT * pps}px"></div></div></div>`;
+  R += `<div class="snapline" id="snapline" hidden></div><div class="playhead" id="playhead" style="left:${playT * pps}px"></div></div></div>`;
   tl.innerHTML = L + R;
   $('#clipCount').textContent = `${p.clips.filter(c => !c.role).length} clips`;
   const hasI = p.clips.some(c => c.role === 'intro'), hasO = p.clips.some(c => c.role === 'outro');
@@ -1677,6 +1678,23 @@ $('#tl').addEventListener('click', e => {
   const hc = e.target.closest('[data-hl]'); if (hc) { S.sel = { type: 'text', id: hc.dataset.hl }; seek(timeFromX(e.clientX)); renderTimeline(); renderInspector(); return; }
   if (e.target.closest('#ruler') || e.target.closest('.lane')) seek(timeFromX(e.clientX));
 });
+/* snapping: every cut on every track (clip joins, text and audio edges, playhead, start/end) */
+function cutPoints(p, skip) {
+  const pts = [0, vTotal(p), playT]; let acc = 0;
+  p.clips.forEach(c => { acc += c.dur; pts.push(acc); });
+  (p.texts || []).forEach(t => { if (t === skip) return; const r = textRange(p, t); if (r) pts.push(r[0], r[1]); });
+  p.audio.forEach(tr => tr.forEach(c => { if (c !== skip) pts.push(c.at, c.at + c.dur); }));
+  return [...new Set(pts.map(v => Math.round(v * 1000) / 1000))];
+}
+const SNAP_PX = 8;
+/* nearest cut within SNAP_PX pixels of t, or null; hold Alt to turn snapping off */
+function snapTime(t, cuts, e) {
+  if (e && e.altKey) return null;
+  const thr = SNAP_PX / (S.pps || 40); let best = null;
+  cuts.forEach(c => { const d = Math.abs(c - t); if (d <= thr && (best === null || d < Math.abs(best - t))) best = c; });
+  return best;
+}
+function showSnap(t) { const l = $('#snapline'); if (!l) return; if (t == null) { l.hidden = true; return; } l.style.left = t * S.pps + 'px'; l.hidden = false; }
 /* move text and audio clips: drag along the track, onto another track, or to a new track */
 let mv = null;
 function moveTarget(e) {
@@ -1699,7 +1717,7 @@ $('#tl').addEventListener('pointerdown', e => {
   let obj, r, track;
   if (isText) { obj = p.texts.find(x => x.id === el.dataset.hl); if (!obj || obj.locked) return; r = textRange(p, obj); if (!r) return; track = obj.track; }
   else { const f = findClip(el.dataset.aid); if (!f || f.locked) return; obj = f.c; r = [obj.at, obj.at + obj.dur]; track = f.ti; }
-  mv = { el, isText, obj, track, s: r[0], dur: r[1] - r[0], x0: e.clientX, y0: e.clientY, moved: false, pid: e.pointerId, tg: null };
+  mv = { el, isText, obj, track, s: r[0], dur: r[1] - r[0], x0: e.clientX, y0: e.clientY, moved: false, pid: e.pointerId, tg: null, cuts: cutPoints(p, obj), snapS: null };
 });
 $('#tl').addEventListener('pointermove', e => {
   if (!mv) return;
@@ -1710,7 +1728,12 @@ $('#tl').addEventListener('pointermove', e => {
     try { mv.el.setPointerCapture(mv.pid); } catch (err) {}
     mv.el.classList.add('moving'); document.body.classList.add(mv.isText ? 'tmove' : 'amove');
   }
-  mv.el.style.left = Math.max(0, mv.s + dx / S.pps) * S.pps + 'px'; mv.el.style.transform = `translateY(${dy}px)`;
+  const rawS = Math.max(0, mv.s + dx / S.pps), a = snapTime(rawS, mv.cuts, e), b = snapTime(rawS + mv.dur, mv.cuts, e);
+  let st = rawS, line = null;
+  if (a != null && (b == null || Math.abs(a - rawS) <= Math.abs(b - rawS - mv.dur))) { st = a; line = a; }
+  else if (b != null && b - mv.dur >= 0) { st = b - mv.dur; line = b; }
+  mv.snapS = line != null ? Math.round(st * 1000) / 1000 : null; showSnap(line);
+  mv.el.style.left = st * S.pps + 'px'; mv.el.style.transform = `translateY(${dy}px)`;
   const tg = moveTarget(e), p = proj();
   $$('#tl .drop').forEach(x => x.classList.remove('drop'));
   if (tg && !moveLocked(p, tg, mv.isText)) tg.el.classList.add('drop');
@@ -1718,12 +1741,12 @@ $('#tl').addEventListener('pointermove', e => {
 });
 function endMove(e, cancel) {
   const d = mv; if (!d) return; mv = null;
-  document.body.classList.remove('tmove', 'amove'); $$('#tl .drop').forEach(x => x.classList.remove('drop'));
+  document.body.classList.remove('tmove', 'amove'); $$('#tl .drop').forEach(x => x.classList.remove('drop')); showSnap(null);
   if (!d.moved) return;
   S.trimClick = true; setTimeout(() => { S.trimClick = false; }, 0);
   const p = proj(), T = vTotal(p);
   if (cancel) { renderTimeline(); return; }
-  const dx = e.clientX - d.x0, desired = Math.max(0, Math.round((d.s + dx / S.pps) * 10) / 10);
+  const dx = e.clientX - d.x0, desired = d.snapS ?? Math.max(0, Math.round((d.s + dx / S.pps) * 10) / 10);
   const tg = d.tg || { kind: 'track', i: d.track };
   if (moveLocked(p, tg, d.isText)) { toast('That track is locked.'); renderTimeline(); return; }
   if (d.isText) {
@@ -1756,7 +1779,7 @@ $('#tl').addEventListener('pointerdown', e => {
   const r = textRange(p, tx); if (!r) return;
   e.preventDefault(); e.stopPropagation(); if (playing) pause();
   const [lo, hi] = trackBounds(p, tx);
-  trimD = { tx, el, edge: h.dataset.trim, s: r[0], e: r[1], lo, hi, x0: e.clientX, T: vTotal(p), moved: false };
+  trimD = { tx, el, edge: h.dataset.trim, s: r[0], e: r[1], lo, hi, x0: e.clientX, T: vTotal(p), moved: false, cuts: cutPoints(p, tx) };
   el.classList.add('trimming'); h.setPointerCapture(e.pointerId);
 });
 $('#tl').addEventListener('pointermove', e => {
@@ -1764,7 +1787,9 @@ $('#tl').addEventListener('pointermove', e => {
   if (Math.abs(e.clientX - d.x0) > 2) d.moved = true; if (!d.moved) return;
   const dt = (e.clientX - d.x0) / S.pps, snap = v => Math.round(v * 10) / 10;
   let st = d.s, en = d.e;
-  if (d.edge === 'start') st = clamp(snap(d.s + dt), d.lo, d.e - .3); else en = clamp(snap(d.e + dt), d.s + .3, d.hi);
+  const raw = (d.edge === 'start' ? d.s : d.e) + dt, sn = snapTime(raw, d.cuts, e), v = sn ?? snap(raw);
+  if (d.edge === 'start') st = clamp(v, d.lo, d.e - .3); else en = clamp(v, d.s + .3, d.hi);
+  showSnap(sn != null && (d.edge === 'start' ? st : en) === sn ? sn : null);
   const pl = d.el.nextElementSibling; if (pl && pl.classList.contains('tplus')) pl.hidden = true;
   d.tx.start = st; d.tx.end = en;
   d.el.style.left = st * S.pps + 'px'; d.el.style.width = Math.max(12, (en - st) * S.pps - 2) + 'px';
@@ -1772,7 +1797,7 @@ $('#tl').addEventListener('pointermove', e => {
   seek(d.edge === 'start' ? Math.min(st + .6, (st + en) / 2) : Math.max(en - .4, (st + en) / 2));
 });
 function endTrim() {
-  const d = trimD; if (!d) return; trimD = null;
+  const d = trimD; if (!d) return; trimD = null; showSnap(null);
   S.sel = { type: 'text', id: d.tx.id }; S.trimClick = true; setTimeout(() => { S.trimClick = false; }, 0);
   if (d.moved) toast(`Text on T${d.tx.track + 1} shows ${fmtT(d.tx.start)} to ${fmtT(d.tx.end)}.`);
   renderTimeline(); renderInspector();
