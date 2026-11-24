@@ -225,6 +225,10 @@ body.amove [data-newaudio] .g-drop{display:inline}
 .clip .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .clip.sel{box-shadow:0 0 0 2px var(--fg), 0 0 0 4px var(--panel) inset}
 .clip.dragging{opacity:.45}
+.clk{width:22px;height:22px;border-radius:5px;border:0;background:rgba(0,0,0,.25);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;flex:none;margin-left:auto}
+.clk:hover{background:rgba(0,0,0,.45)}
+.clk svg{width:12px;height:12px}
+.clk[aria-pressed="true"]{background:rgba(255,255,255,.9);color:#0D3253}
 .cdel{width:22px;height:22px;border-radius:5px;border:0;background:rgba(0,0,0,.35);color:#fff;display:flex;align-items:center;justify-content:center;padding:0;flex:none}
 .cdel:hover{background:#DC3E3E}
 .cdel svg{width:13px;height:13px}
@@ -1207,7 +1211,7 @@ function renderTimeline() {
     if (c.role === 'outro' && plusAt === null) plusAt = acc;
     const th = m && m.thumb ? `style="background-image:url(${m.thumb})"` : '';
     const label = c.role ? (c.role === 'intro' ? 'Intro' : 'Outro') : (m ? m.name : 'Missing file');
-    R += `<div role="button" tabindex="0" class="clip ${c.role ? 'role' : ''} ${S.sel?.id === c.id ? 'sel' : ''}" ${c.role || p.vLocked ? '' : 'draggable="true"'} data-cid="${c.id}" style="left:${acc * pps}px;width:${Math.max(8, c.dur * pps - 2)}px" title="${esc(label)} · ${c.dur.toFixed(1)}s">${c.dur * pps > 60 ? `<span class="th" ${th}></span>` : ''}<span class="nm">${esc(label)}</span>${S.sel?.id === c.id && !p.vLocked ? `<button class="cdel" data-cdel="${c.id}" aria-label="Delete ${esc(label)}" title="Delete clip (Delete key)">${ICON('i-trash')}</button>` : ''}</div>`;
+    R += `<div role="button" tabindex="0" class="clip ${c.role ? 'role' : ''} ${S.sel?.id === c.id ? 'sel' : ''}" ${c.role || p.vLocked ? '' : 'draggable="true"'} data-cid="${c.id}" style="left:${acc * pps}px;width:${Math.max(8, c.dur * pps - 2)}px" title="${esc(label)} · ${c.dur.toFixed(1)}s">${c.dur * pps > 60 ? `<span class="th" ${th}></span>` : ''}<span class="nm">${esc(label)}</span>${c.role ? `<button class="clk" data-clock="${c.id}" aria-pressed="${!!c.locked}" aria-label="${c.locked ? 'Unlock' : 'Lock'} ${esc(label)}" title="${c.locked ? 'Unlock' : 'Lock'} ${esc(label)}">${ICON(c.locked ? 'i-lock' : 'i-unlock')}</button>` : ''}${S.sel?.id === c.id && !p.vLocked && !c.locked ? `<button class="cdel" data-cdel="${c.id}" aria-label="Delete ${esc(label)}" title="Delete clip (Delete key)">${ICON('i-trash')}</button>` : ''}</div>`;
     acc += c.dur;
   });
   if (plusAt === null) plusAt = acc;
@@ -1235,7 +1239,7 @@ function renderTimeline() {
 /* ---------------- UI: inspector ---------------- */
 function findClip(id) {
   const p = proj();
-  let i = p.clips.findIndex(c => c.id === id); if (i > -1) return { list: p.clips, i, c: p.clips[i], kind: 'v', locked: !!p.vLocked };
+  let i = p.clips.findIndex(c => c.id === id); if (i > -1) return { list: p.clips, i, c: p.clips[i], kind: 'v', locked: !!p.vLocked || !!p.clips[i].locked };
   for (let ti = 0; ti < p.audio.length; ti++) { const tr = p.audio[ti]; i = tr.findIndex(c => c.id === id); if (i > -1) return { list: tr, i, c: tr[i], kind: 'a', ti, locked: !!p.aLocks[ti] }; }
   return null;
 }
@@ -1272,7 +1276,7 @@ function renderInspector() {
   if (!f) { el.innerHTML = '<span class="muted">Select a clip on the timeline to trim, frame, reorder or replace it. Space plays and pauses.</span>'; return; }
   const c = f.c, m = media.get(c.mid), dis = f.locked ? 'disabled' : '';
   const maxDur = m && (m.kind === 'video' || m.kind === 'audio') ? Math.max(.5, m.dur - c.in) : 60;
-  let h = `<div class="row"><b>${c.role ? (c.role === 'intro' ? 'Intro' : 'Outro') : esc(m ? m.name : 'Missing file')}</b>${f.locked ? `<span class="pill-note">${ICON('i-lock')} Track locked</span>` : `<span class="muted">${m ? (m.kind === 'gen' ? 'built-in' : m.kind) : ''}</span>`}</div>`;
+  let h = `<div class="row"><b>${c.role ? (c.role === 'intro' ? 'Intro' : 'Outro') : esc(m ? m.name : 'Missing file')}</b>${f.locked ? `<span class="pill-note">${ICON('i-lock')} ${f.c.locked ? 'Locked' : 'Track locked'}</span>` : `<span class="muted">${m ? (m.kind === 'gen' ? 'built-in' : m.kind) : ''}</span>`}</div>`;
   h += `<div class="row"><label for="inDur">Duration (s)</label><input type="number" id="inDur" ${dis} min="0.5" max="${maxDur.toFixed(2)}" step="0.1" value="${c.dur.toFixed(1)}"></div>`;
   if (f.kind === 'a') h += `<div class="row"><label for="inAt">Plays from (s)</label><input type="number" id="inAt" ${dis} min="0" step="0.1" value="${c.at.toFixed(1)}"></div>`;
   if (m && (m.kind === 'video' || m.kind === 'audio')) h += `<div class="row"><label for="inIn">${f.kind === 'a' ? 'Skip first (s)' : 'Start at (s)'}</label><input type="number" id="inIn" ${dis} min="0" max="${Math.max(0, m.dur - .5).toFixed(2)}" step="0.1" value="${c.in.toFixed(1)}"></div>`;
@@ -1285,7 +1289,7 @@ function renderInspector() {
     const opts = [...media.values()].filter(x => !x.quoteOnly && (x.kind === 'video' || x.kind === 'gen' || x.kind === 'image'));
     h += `<div class="row"><label for="inRep">Use</label><select id="inRep" ${dis}>${opts.map(x => `<option value="${x.id}" ${x.id === c.mid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>`;
     h += '<span class="muted">Upload your own Intro.mp4 or Outro.mp4, then pick it here.</span>';
-    h += `<div class="btns"><button class="btn small danger" data-act="rm" ${dis}>${ICON('i-trash')} Delete ${c.role}</button></div>`;
+    h += `<div class="btns"><button class="btn small" data-clock="${c.id}" ${p.vLocked ? 'disabled' : ''}>${ICON(c.locked ? 'i-unlock' : 'i-lock')} ${c.locked ? 'Unlock' : 'Lock'} ${c.role}</button><button class="btn small danger" data-act="rm" ${dis}>${ICON('i-trash')} Delete ${c.role}</button></div>`;
   } else {
     h += `<div class="btns">${f.kind === 'v' ? `<button class="btn small" data-act="mv-l" ${dis}>Move left</button><button class="btn small" data-act="mv-r" ${dis}>Move right</button>` : ''}<button class="btn small" data-act="dup" ${dis}>Duplicate</button><button class="btn small danger" data-act="rm" ${dis}>Delete</button></div>`;
   }
@@ -1377,11 +1381,11 @@ function renderVLogo() {
   const p = proj(), el = $('#vLogo'); if (!el || !isVideo()) return;
   const m = p.logoMid && media.get(p.logoMid);
   if (!m) { el.innerHTML = '<button class="btn" data-vlogo="up">Upload logo</button><span class="muted">PNG or SVG with a transparent background works best.</span>'; return; }
-  const on = p.logoOn !== false, size = p.logoSize || 100;
-  el.innerHTML = `<div class="vl-row"><span class="vl-th" style="background-image:url(${m.thumb})"></span><span class="vl-nm" title="${esc(m.name)}">${esc(m.name)}</span><button class="ib del" data-vlogo="rm" aria-label="Delete logo" title="Delete logo">${ICON('i-trash')}</button></div>
-    <div class="row"><span class="lbl">Show</span><div class="seg"><button data-vlogo="on" aria-pressed="${on}">On</button><button data-vlogo="off" aria-pressed="${!on}">Off</button></div></div>
-    <div class="row"><label for="vLogoSize">Size</label><span class="ctlrow"><input type="range" id="vLogoSize" min="40" max="250" step="5" value="${size}" ${on ? '' : 'disabled'}><output id="oVLS">${size}%</output></span></div>
-    <button class="btn small" data-vlogo="up">Replace logo</button>`;
+  const on = p.logoOn !== false, size = p.logoSize || 100, lk = !!p.logoLocked, d = lk ? 'disabled' : '';
+  el.innerHTML = `<div class="vl-row"><span class="vl-th" style="background-image:url(${m.thumb})"></span><span class="vl-nm" title="${esc(m.name)}">${esc(m.name)}${lk ? ' · locked' : ''}</span><button class="ib" data-vlogo="lock" aria-pressed="${lk}" aria-label="${lk ? 'Unlock' : 'Lock'} logo" title="${lk ? 'Unlock' : 'Lock'} logo">${ICON(lk ? 'i-lock' : 'i-unlock')}</button><button class="ib del" data-vlogo="rm" ${d} aria-label="Delete logo" title="${lk ? 'Unlock to delete' : 'Delete logo'}">${ICON('i-trash')}</button></div>
+    <div class="row"><span class="lbl">Show</span><div class="seg"><button data-vlogo="on" aria-pressed="${on}" ${d}>On</button><button data-vlogo="off" aria-pressed="${!on}" ${d}>Off</button></div></div>
+    <div class="row"><label for="vLogoSize">Size</label><span class="ctlrow"><input type="range" id="vLogoSize" min="40" max="250" step="5" value="${size}" ${on && !lk ? '' : 'disabled'}><output id="oVLS">${size}%</output></span></div>
+    <button class="btn small" data-vlogo="up" ${d}>Replace logo</button>`;
 }
 function showLogoFrame() {
   const ur = userRange(proj()); if (!ur || playing) return;
@@ -1389,13 +1393,15 @@ function showLogoFrame() {
 }
 $('#vLogo').addEventListener('click', e => {
   const b = e.target.closest('[data-vlogo]'); if (!b || exporting) return; const p = proj(), a = b.dataset.vlogo;
+  if (a === 'lock') { p.logoLocked = !p.logoLocked; toast(p.logoLocked ? 'Logo locked.' : 'Logo unlocked.'); renderVLogo(); return; }
+  if (p.logoLocked) { toast('The logo is locked. Unlock it to change it.'); return; }
   if (a === 'up') { $('#vLogoIn').click(); return; }
   if (a === 'rm') { p.logoMid = null; toast('Logo removed from this video.'); }
   if (a === 'on' || a === 'off') { p.logoOn = a === 'on'; showLogoFrame(); }
   renderVLogo(); scheduleDraw();
 });
 $('#vLogo').addEventListener('input', e => {
-  if (e.target.id !== 'vLogoSize') return; const p = proj(); p.logoSize = parseInt(e.target.value, 10);
+  if (e.target.id !== 'vLogoSize') return; const p = proj(); if (p.logoLocked) return; p.logoSize = parseInt(e.target.value, 10);
   $('#oVLS').textContent = p.logoSize + '%'; showLogoFrame(); scheduleDraw();
 });
 $('#vLogoIn').addEventListener('change', async e => {
@@ -1412,7 +1418,7 @@ function renderClipActs() {
   const f = S.sel && S.sel.type === 'clip' && findClip(S.sel.id);
   if (!f) { el.innerHTML = ''; return; }
   const m = media.get(f.c.mid), name = f.c.role ? (f.c.role === 'intro' ? 'Intro' : 'Outro') : (m ? m.name : 'Clip'), dis = f.locked ? 'disabled' : '';
-  el.innerHTML = `<span class="nm" title="${esc(name)}">${esc(name)}</span>${f.c.role ? '' : `<button class="btn small" data-act="dup" ${dis}>${ICON('i-copy')} Duplicate</button>`}<button class="btn small danger" data-act="rm" ${dis} title="${f.locked ? 'Unlock the track to delete' : 'Delete (Delete key)'}">${ICON('i-trash')} Delete</button>`;
+  el.innerHTML = `<span class="nm" title="${esc(name)}">${esc(name)}</span>${f.c.role ? `<button class="btn small" data-clock="${f.c.id}">${ICON(f.c.locked ? 'i-unlock' : 'i-lock')} ${f.c.locked ? 'Unlock' : 'Lock'}</button>` : `<button class="btn small" data-act="dup" ${dis}>${ICON('i-copy')} Duplicate</button>`}<button class="btn small danger" data-act="rm" ${dis} title="${f.locked ? 'Unlock the track to delete' : 'Delete (Delete key)'}">${ICON('i-trash')} Delete</button>`;
 }
 
 /* ---------------- UI: quote panels ---------------- */
@@ -1589,6 +1595,7 @@ $('#tl').addEventListener('click', e => {
   const at = e.target.closest('[data-addtext]'); if (at) { addText(+at.dataset.addtext); return; }
   const aa = e.target.closest('[data-addafter]'); if (aa) { const tx = p.texts.find(x => x.id === aa.dataset.addafter); const r = tx && textRange(p, tx); if (r) addTextClip(tx.track, r[1], tx); return; }
   const ao = e.target.closest('[data-addon]'); if (ao) { addTextClip(+ao.dataset.addon, playT, null); return; }
+  const clk = e.target.closest('[data-clock]'); if (clk) { toggleClipLock(clk.dataset.clock); return; }
   const cdel = e.target.closest('[data-cdel]');
   if (cdel) { S.sel = { type: 'clip', id: cdel.dataset.cdel }; clipAction('rm'); return; }
   const lockB = e.target.closest('[data-tlock]');
@@ -1796,7 +1803,7 @@ $('#inspector').addEventListener('change', e => {
 function clipAction(a) {
   if (exporting) return;
   const f = S.sel && findClip(S.sel.id); if (!f) return;
-  if (f.locked) { toast('That track is locked. Unlock it to change its clips.'); return; }
+  if (f.locked) { toast(f.c.locked ? `The ${f.c.role || 'clip'} is locked. Unlock it to change it.` : 'That track is locked. Unlock it to change its clips.'); return; }
   if (a === 'reset-pos') { f.c.ox = 0; f.c.oy = 0; f.c.zoom = 1; renderInspector(); scheduleDraw(); return; }
   if (a === 'rm') {
     const m = media.get(f.c.mid); f.list.splice(f.i, 1); S.sel = null;
@@ -1808,6 +1815,7 @@ function clipAction(a) {
   seek(Math.min(playT, vTotal())); renderTimeline(); renderInspector();
 }
 $('#inspector').addEventListener('click', e => {
+  const ck = e.target.closest('[data-clock]'); if (ck) { toggleClipLock(ck.dataset.clock); return; }
   const hl = curText();
   const xd = e.target.closest('[data-xdel]'); if (xd) { deleteText(xd.dataset.xdel); return; }
   const hb = e.target.closest('[data-hlbg],[data-hlc],[data-hlreset],[data-hltime]');
@@ -1820,7 +1828,13 @@ $('#inspector').addEventListener('click', e => {
   }
   const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act);
 });
-$('#clipActs').addEventListener('click', e => { const x = e.target.closest('[data-xdel]'); if (x) { deleteText(x.dataset.xdel); return; } const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
+$('#clipActs').addEventListener('click', e => { const ck = e.target.closest('[data-clock]'); if (ck) { toggleClipLock(ck.dataset.clock); return; } const x = e.target.closest('[data-xdel]'); if (x) { deleteText(x.dataset.xdel); return; } const b = e.target.closest('[data-act]'); if (b) clipAction(b.dataset.act); });
+function toggleClipLock(id) {
+  const c = proj().clips.find(x => x.id === id); if (!c) return;
+  c.locked = !c.locked; S.sel = { type: 'clip', id };
+  toast(`${c.role === 'intro' ? 'Intro' : c.role === 'outro' ? 'Outro' : 'Clip'} ${c.locked ? 'locked' : 'unlocked'}.`);
+  renderTimeline(); renderInspector();
+}
 $('#tlRestore').addEventListener('click', e => {
   const b = e.target.closest('[data-restore]'); if (!b || exporting) return; const p = proj(), r = b.dataset.restore;
   if (p.vLocked) { toast('V1 is locked. Unlock it to add the ' + r + '.'); return; }
@@ -1978,7 +1992,7 @@ let pdrag = null;
 function toCanvasPt(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; }
 function videoPanTarget() {
   const p = proj(); if (!p.clips || p.vLocked) return null;
-  const hit = clipAt(p, playT); if (!hit) return null;
+  const hit = clipAt(p, playT); if (!hit || hit.c.locked) return null;
   const ov = overflowOf(media.get(hit.c.mid), hit.c.zoom);
   return ov && (ov.ow > 1 || ov.oh > 1) ? { obj: hit.c, kx: 'ox', ky: 'oy', ...ov } : null;
 }
