@@ -67,6 +67,13 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 .side-sec + .side-sec{border-top:1px solid var(--line)}
 .side-label{font-size:12.5px;color:var(--muted);padding:4px 8px 6px}
 .side .grow{flex:1}
+.side-sec.files{flex:1;min-height:200px;gap:8px;padding-bottom:12px}
+.files-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding-right:8px}
+.files-head .side-label{padding-bottom:0}
+.files-head .tag{font-size:11.5px;color:var(--muted)}
+.side .lib{flex:1;min-height:0;max-height:none;background:transparent;border:0;padding:0;border-radius:0}
+.side .lib li{padding:5px 6px 5px 4px}
+.side .lib .th{width:40px;height:28px}
 .nav{display:flex;align-items:center;gap:10px;width:100%;border:1px solid transparent;background:transparent;border-radius:8px;padding:7px 8px;text-align:left;color:var(--fg);min-height:36px}
 .nav:hover{background:var(--hover)}
 .nav .i{color:var(--muted)}
@@ -100,12 +107,12 @@ svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stro
 
 /* collapsed sidebar: icon rail */
 body.collapsed .side{width:60px}
-body.collapsed .side .lbl, body.collapsed .side .tag, body.collapsed .side-name, body.collapsed .side-label, body.collapsed .switchv,
+body.collapsed .side .lbl, body.collapsed .side .tag, body.collapsed .side .lib, body.collapsed .files-head, body.collapsed .side-name, body.collapsed .side-label, body.collapsed .switchv,
 body.collapsed .pc-head, body.collapsed .pc-text, body.collapsed .radios{display:none}
 body.collapsed .side-head{flex-direction:column;padding:12px 8px;gap:8px}
 body.collapsed .nav{justify-content:center;padding:8px 0}
 body.collapsed .exportbox{margin:0 8px 10px;padding:6px;background:none;border:0}
-body.collapsed #exportBtn{padding:8px 0}
+body.collapsed #exportBtn, body.collapsed #uploadBtn{padding:8px 0}
 body.collapsed .side-foot{justify-content:center;padding:12px 0}
 
 /* main */
@@ -323,6 +330,8 @@ textarea#layerText:read-only{opacity:.6}
   .app{grid-template-columns:minmax(0,1fr)}
   .side,body.collapsed .side{width:auto;position:static;height:auto;min-height:0}
   .side .grow,#collapseBtn{display:none}
+  .side-sec.files{min-height:0}
+  .side .lib{max-height:240px}
   .side-sec.gens #modes{flex-direction:row;overflow-x:auto}
   #modes{display:flex;gap:4px}
   #modes .nav{flex:1;min-width:140px}
@@ -373,7 +382,15 @@ textarea#layerText:read-only{opacity:.6}
         </button>
       </nav>
     </div>
-    <div class="grow"></div>
+    <div class="grow" id="sideGrow"></div>
+    <div class="side-sec files" id="sideFiles">
+      <div class="files-head"><span class="side-label">Uploaded files</span><span class="tag">click or drag to add</span></div>
+      <button class="btn block" id="uploadBtn" title="Upload video, image or audio files">
+        <svg class="i" viewBox="0 0 24 24"><path d="M12 19V8M7 12l5-5 5 5M5 4h14"/></svg><span class="lbl">Upload files</span>
+      </button>
+      <input type="file" id="fileIn" multiple accept="video/*,image/*,audio/*" hidden>
+      <ul class="lib" id="lib"></ul>
+    </div>
     <div class="exportbox">
       <div class="pc-head"><span class="pc-ic"><svg class="i"><use href="#i-dl"/></svg></span><span><small>Export as</small><b id="fmtName">MP4 video</b></span></div>
       <p class="pc-text" id="fmtText">Download the finished post to share on social media.</p>
@@ -467,12 +484,6 @@ textarea#layerText:read-only{opacity:.6}
     </div>
 
     <div id="videoRight">
-      <div class="group">
-        <button class="btn primary" id="uploadBtn" style="align-self:flex-start">+ Upload Files</button>
-        <input type="file" id="fileIn" multiple accept="video/*,image/*,audio/*" hidden>
-        <div class="g-title">Uploaded files <small>click or drag to add</small></div>
-        <ul class="lib" id="lib"></ul>
-      </div>
       <div class="group">
         <div class="g-title">Selected</div>
         <div class="inspector" id="inspector"></div>
@@ -1044,6 +1055,7 @@ function renderModes() {
   $$('#modes .mode').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
   $('#videoCenter').hidden = !isVideo(); $('#quoteCenter').hidden = isVideo();
   $('#videoRight').hidden = !isVideo(); $('#quoteRight').hidden = isVideo();
+  $('#sideFiles').hidden = !isVideo(); $('#sideGrow').hidden = isVideo();
   const opts = isVideo() ? [['mp4', 'MP4'], ['gif', 'GIF']] : [['jpeg', 'JPEG'], ['png', 'PNG']];
   const cur = isVideo() ? S.fmt.video : S.fmt.image;
   $('#fmtRadios').innerHTML = opts.map(([v, l]) => `<label><input type="radio" name="fmt" id="fmt-${v}" value="${v}" ${v === cur ? 'checked' : ''}>${l}</label>`).join('');
@@ -1068,7 +1080,8 @@ function renderRatio() {
 
 /* ---------------- UI: library ---------------- */
 function renderLib() {
-  const items = [...media.values()].filter(m => !m.quoteOnly);
+  const all = [...media.values()].filter(m => !m.quoteOnly);
+  const items = [...all.filter(m => !m.builtin).reverse(), ...all.filter(m => m.builtin)];
   $('#lib').innerHTML = items.map(m => {
     if (!m.thumb && m.kind === 'gen') m.thumb = genThumb(m);
     const meta = m.kind === 'gen' ? `Built-in · ${m.dur}s` : m.kind === 'image' ? 'Image' : `${m.kind === 'video' ? 'Video' : 'Audio'} · ${fmtT(m.dur)}`;
