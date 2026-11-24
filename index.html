@@ -853,9 +853,11 @@ function drawVideo(c, W, H, t) {
 function drawVideoLogo(c, W, H, p) {
   const m = p.logoMid && media.get(p.logoMid); if (!m || !m.el || p.logoOn === false) return;
   const s = Math.min(W, H) / 1080, pad = 48 * s, iw = m.el.naturalWidth, ih = m.el.naturalHeight; if (!iw || !ih) return;
-  let h = 90 * s * (p.logoSize || 100) / 100, w = h * iw / ih;
-  if (w > W * .45) { w = W * .45; h = w * ih / iw; }
-  c.drawImage(m.el, pad, pad, w, h);
+  /* 100% = the image's own pixels, one to one; no shrinking to fit */
+  const k = (p.logoSize || 100) / 100, x = Math.round(pad), y = Math.round(pad);
+  c.save(); c.imageSmoothingQuality = 'high';
+  if (k === 1) c.drawImage(m.el, x, y); else c.drawImage(m.el, x, y, Math.round(iw * k), Math.round(ih * k));
+  c.restore();
 }
 /* when a text layer shows: its own start/end, or (null) the span of your clips */
 function textRange(p, tx) {
@@ -1004,9 +1006,9 @@ function drawLogo(c, W, H, q) {
   if (q.logoPlace === 'off') return;
   const s = Math.min(W, H) / 1080, m = 56 * s, lm = q.logoMid && media.get(q.logoMid);
   let w, h;
-  if (lm && lm.el) { h = 84 * s; w = h * lm.el.naturalWidth / lm.el.naturalHeight; if (w > W * .3) { w = W * .3; h = w * lm.el.naturalHeight / lm.el.naturalWidth; } }
+  if (lm && lm.el) { w = lm.el.naturalWidth; h = lm.el.naturalHeight; /* the logo's own pixels, one to one */ }
   else { c.font = `700 ${40 * s}px ${UI}`; w = c.measureText('Hali').width + 44 * s; h = 64 * s; }
-  const x = q.logoPlace === 'left' ? m : q.logoPlace === 'center' ? (W - w) / 2 : W - m - w, y = H - m - h;
+  const x = Math.round(q.logoPlace === 'left' ? m : q.logoPlace === 'center' ? (W - w) / 2 : W - m - w), y = Math.round(H - m - h);
   q._logoBox = { x, y, w, h };
   const col = logoColor(q);
   if (lm && lm.el) c.drawImage(col ? tinted(lm.el, col) : lm.el, x, y, w, h);
@@ -1385,6 +1387,7 @@ function renderVLogo() {
   el.innerHTML = `<div class="vl-row"><span class="vl-th" style="background-image:url(${m.thumb})"></span><span class="vl-nm" title="${esc(m.name)}">${esc(m.name)}${lk ? ' · locked' : ''}</span><button class="ib" data-vlogo="lock" aria-pressed="${lk}" aria-label="${lk ? 'Unlock' : 'Lock'} logo" title="${lk ? 'Unlock' : 'Lock'} logo">${ICON(lk ? 'i-lock' : 'i-unlock')}</button><button class="ib del" data-vlogo="rm" ${d} aria-label="Delete logo" title="${lk ? 'Unlock to delete' : 'Delete logo'}">${ICON('i-trash')}</button></div>
     <div class="row"><span class="lbl">Show</span><div class="seg"><button data-vlogo="on" aria-pressed="${on}" ${d}>On</button><button data-vlogo="off" aria-pressed="${!on}" ${d}>Off</button></div></div>
     <div class="row"><label for="vLogoSize">Size</label><span class="ctlrow"><input type="range" id="vLogoSize" min="40" max="250" step="5" value="${size}" ${on && !lk ? '' : 'disabled'}><output id="oVLS">${size}%</output></span></div>
+    <span class="muted">${m.el.naturalWidth}×${m.el.naturalHeight} px. At 100% it is placed at exactly this size.</span>
     <button class="btn small" data-vlogo="up" ${d}>Replace logo</button>`;
 }
 function showLogoFrame() {
